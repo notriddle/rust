@@ -107,6 +107,39 @@ where
     pub fn retain(&mut self, f: impl Fn(&(K, V)) -> bool) {
         self.0.retain(f)
     }
+
+    pub fn entry<'a>(&'a mut self, k: K) -> Entry<'a, K, V> {
+        match self.0.iter().position(|(key, _)| &k == key) {
+            Some(i) => Entry::Occupied(&mut self.0[i].1),
+            None => Entry::Vacant(VacantEntry(self, k)),
+        }
+    }
+}
+
+pub struct VacantEntry<'a, K, V>(&'a mut VecMap<K, V>, K);
+
+pub enum Entry<'a, K, V> {
+    Occupied(&'a mut V),
+    Vacant(VacantEntry<'a, K, V>),
+}
+
+impl<'a, K, V> Entry<'a, K, V>
+where
+    K: Debug + PartialEq,
+    V: Debug,
+{
+    pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V {
+        match self {
+            Entry::Occupied(v) => v,
+            Entry::Vacant(VacantEntry(map, k)) => {
+                map.0.push((k, default()));
+                &mut map.0.last_mut().unwrap().1
+            }
+        }
+    }
+    pub fn or_default(self) -> &'a mut V where V: Default {
+        self.or_insert_with(Default::default)
+    }
 }
 
 impl<K, V> Default for VecMap<K, V> {
