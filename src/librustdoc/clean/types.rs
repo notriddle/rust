@@ -15,6 +15,7 @@ use rustc_ast::{self as ast, AttrStyle};
 use rustc_attr::{ConstStability, Deprecation, Stability, StabilityLevel};
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::thin_vec::ThinVec;
+use rustc_data_structures::vec_map::VecMap;
 use rustc_hir as hir;
 use rustc_hir::def::{CtorKind, DefKind, Res};
 use rustc_hir::def_id::{CrateNum, DefId, DefIndex, CRATE_DEF_INDEX, LOCAL_CRATE};
@@ -1062,8 +1063,8 @@ impl Attributes {
     /// Return the doc-comments on this item, grouped by the module they came from.
     ///
     /// The module can be different if this is a re-export with added documentation.
-    crate fn collapsed_doc_value_by_module_level(&self) -> FxHashMap<Option<DefId>, String> {
-        let mut ret = FxHashMap::default();
+    crate fn collapsed_doc_value_by_module_level(&self) -> VecMap<Option<DefId>, String> {
+        let mut ret = VecMap::default();
         if self.doc_strings.len() == 0 {
             return ret;
         }
