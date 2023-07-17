@@ -232,27 +232,27 @@ pub trait FileExt {
 // FIXME: bind random_get maybe? - on crates.io for unix
 
 impl FileExt for fs::File {
-    fn read_vectored_at(&self, bufs: &mut [IoSliceMut<'_>], offset: u64) -> io::Result<usize> {
+    fn read_vectored_at(&self, bufs: &mut [IoSliceMut<'_>], offset: u64) -> io::Result<usize> { os_fn!{{
         self.as_inner().as_inner().pread(bufs, offset)
-    }
+    }} }
 
-    fn write_vectored_at(&self, bufs: &[IoSlice<'_>], offset: u64) -> io::Result<usize> {
+    fn write_vectored_at(&self, bufs: &[IoSlice<'_>], offset: u64) -> io::Result<usize> { os_fn!{{
         self.as_inner().as_inner().pwrite(bufs, offset)
-    }
+    }} }
 
-    fn tell(&self) -> io::Result<u64> {
+    fn tell(&self) -> io::Result<u64> { os_fn!{{
         self.as_inner().as_inner().tell()
-    }
+    }} }
 
-    fn fdstat_set_flags(&self, flags: u16) -> io::Result<()> {
+    fn fdstat_set_flags(&self, flags: u16) -> io::Result<()> { os_fn!{{
         self.as_inner().as_inner().set_flags(flags)
-    }
+    }} }
 
-    fn fdstat_set_rights(&self, rights: u64, inheriting: u64) -> io::Result<()> {
+    fn fdstat_set_rights(&self, rights: u64, inheriting: u64) -> io::Result<()> { os_fn!{{
         self.as_inner().as_inner().set_rights(rights, inheriting)
-    }
+    }} }
 
-    fn advise(&self, offset: u64, len: u64, advice: u8) -> io::Result<()> {
+    fn advise(&self, offset: u64, len: u64, advice: u8) -> io::Result<()> { os_fn!{{
         let advice = match advice {
             a if a == wasi::ADVICE_NORMAL.raw() => wasi::ADVICE_NORMAL,
             a if a == wasi::ADVICE_SEQUENTIAL.raw() => wasi::ADVICE_SEQUENTIAL,
@@ -269,32 +269,32 @@ impl FileExt for fs::File {
         };
 
         self.as_inner().as_inner().advise(offset, len, advice)
-    }
+    }} }
 
-    fn allocate(&self, offset: u64, len: u64) -> io::Result<()> {
+    fn allocate(&self, offset: u64, len: u64) -> io::Result<()> { os_fn!{{
         self.as_inner().as_inner().allocate(offset, len)
-    }
+    }} }
 
-    fn create_directory<P: AsRef<Path>>(&self, dir: P) -> io::Result<()> {
+    fn create_directory<P: AsRef<Path>>(&self, dir: P) -> io::Result<()> { os_fn!{{
         self.as_inner().as_inner().create_directory(osstr2str(dir.as_ref().as_ref())?)
-    }
+    }} }
 
-    fn read_link<P: AsRef<Path>>(&self, path: P) -> io::Result<PathBuf> {
+    fn read_link<P: AsRef<Path>>(&self, path: P) -> io::Result<PathBuf> { os_fn!{{
         self.as_inner().read_link(path.as_ref())
-    }
+    }} }
 
-    fn metadata_at<P: AsRef<Path>>(&self, lookup_flags: u32, path: P) -> io::Result<Metadata> {
+    fn metadata_at<P: AsRef<Path>>(&self, lookup_flags: u32, path: P) -> io::Result<Metadata> { os_fn!{{
         let m = self.as_inner().metadata_at(lookup_flags, path.as_ref())?;
         Ok(FromInner::from_inner(m))
-    }
+    }} }
 
-    fn remove_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
+    fn remove_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> { os_fn!{{
         self.as_inner().as_inner().unlink_file(osstr2str(path.as_ref().as_ref())?)
-    }
+    }} }
 
-    fn remove_directory<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
+    fn remove_directory<P: AsRef<Path>>(&self, path: P) -> io::Result<()> { os_fn!{{
         self.as_inner().as_inner().remove_directory(osstr2str(path.as_ref().as_ref())?)
-    }
+    }} }
 }
 
 /// WASI-specific extensions to [`fs::OpenOptions`].
@@ -367,50 +367,50 @@ pub trait OpenOptionsExt {
 }
 
 impl OpenOptionsExt for OpenOptions {
-    fn lookup_flags(&mut self, flags: u32) -> &mut OpenOptions {
+    fn lookup_flags(&mut self, flags: u32) -> &mut OpenOptions { os_fn!{{
         self.as_inner_mut().lookup_flags(flags);
         self
-    }
+    }} }
 
-    fn directory(&mut self, dir: bool) -> &mut OpenOptions {
+    fn directory(&mut self, dir: bool) -> &mut OpenOptions { os_fn!{{
         self.as_inner_mut().directory(dir);
         self
-    }
+    }} }
 
-    fn dsync(&mut self, enabled: bool) -> &mut OpenOptions {
+    fn dsync(&mut self, enabled: bool) -> &mut OpenOptions { os_fn!{{
         self.as_inner_mut().dsync(enabled);
         self
-    }
+    }} }
 
-    fn nonblock(&mut self, enabled: bool) -> &mut OpenOptions {
+    fn nonblock(&mut self, enabled: bool) -> &mut OpenOptions { os_fn!{{
         self.as_inner_mut().nonblock(enabled);
         self
-    }
+    }} }
 
-    fn rsync(&mut self, enabled: bool) -> &mut OpenOptions {
+    fn rsync(&mut self, enabled: bool) -> &mut OpenOptions { os_fn!{{
         self.as_inner_mut().rsync(enabled);
         self
-    }
+    }} }
 
-    fn sync(&mut self, enabled: bool) -> &mut OpenOptions {
+    fn sync(&mut self, enabled: bool) -> &mut OpenOptions { os_fn!{{
         self.as_inner_mut().sync(enabled);
         self
-    }
+    }} }
 
-    fn fs_rights_base(&mut self, rights: u64) -> &mut OpenOptions {
+    fn fs_rights_base(&mut self, rights: u64) -> &mut OpenOptions { os_fn!{{
         self.as_inner_mut().fs_rights_base(rights);
         self
-    }
+    }} }
 
-    fn fs_rights_inheriting(&mut self, rights: u64) -> &mut OpenOptions {
+    fn fs_rights_inheriting(&mut self, rights: u64) -> &mut OpenOptions { os_fn!{{
         self.as_inner_mut().fs_rights_inheriting(rights);
         self
-    }
+    }} }
 
-    fn open_at<P: AsRef<Path>>(&self, file: &File, path: P) -> io::Result<File> {
+    fn open_at<P: AsRef<Path>>(&self, file: &File, path: P) -> io::Result<File> { os_fn!{{
         let inner = file.as_inner().open_at(path.as_ref(), self.as_inner())?;
         Ok(File::from_inner(inner))
-    }
+    }} }
 }
 
 /// WASI-specific extensions to [`fs::Metadata`].
@@ -432,27 +432,27 @@ pub trait MetadataExt {
 }
 
 impl MetadataExt for fs::Metadata {
-    fn dev(&self) -> u64 {
+    fn dev(&self) -> u64 { os_fn!{{
         self.as_inner().as_wasi().dev
-    }
-    fn ino(&self) -> u64 {
+    }} }
+    fn ino(&self) -> u64 { os_fn!{{
         self.as_inner().as_wasi().ino
-    }
-    fn nlink(&self) -> u64 {
+    }} }
+    fn nlink(&self) -> u64 { os_fn!{{
         self.as_inner().as_wasi().nlink
-    }
-    fn size(&self) -> u64 {
+    }} }
+    fn size(&self) -> u64 { os_fn!{{
         self.as_inner().as_wasi().size
-    }
-    fn atim(&self) -> u64 {
+    }} }
+    fn atim(&self) -> u64 { os_fn!{{
         self.as_inner().as_wasi().atim
-    }
-    fn mtim(&self) -> u64 {
+    }} }
+    fn mtim(&self) -> u64 { os_fn!{{
         self.as_inner().as_wasi().mtim
-    }
-    fn ctim(&self) -> u64 {
+    }} }
+    fn ctim(&self) -> u64 { os_fn!{{
         self.as_inner().as_wasi().ctim
-    }
+    }} }
 }
 
 /// WASI-specific extensions for [`fs::FileType`].
@@ -475,18 +475,18 @@ pub trait FileTypeExt {
 }
 
 impl FileTypeExt for fs::FileType {
-    fn is_block_device(&self) -> bool {
+    fn is_block_device(&self) -> bool { os_fn!{{
         self.as_inner().bits() == wasi::FILETYPE_BLOCK_DEVICE
-    }
-    fn is_char_device(&self) -> bool {
+    }} }
+    fn is_char_device(&self) -> bool { os_fn!{{
         self.as_inner().bits() == wasi::FILETYPE_CHARACTER_DEVICE
-    }
-    fn is_socket_dgram(&self) -> bool {
+    }} }
+    fn is_socket_dgram(&self) -> bool { os_fn!{{
         self.as_inner().bits() == wasi::FILETYPE_SOCKET_DGRAM
-    }
-    fn is_socket_stream(&self) -> bool {
+    }} }
+    fn is_socket_stream(&self) -> bool { os_fn!{{
         self.as_inner().bits() == wasi::FILETYPE_SOCKET_STREAM
-    }
+    }} }
 }
 
 /// WASI-specific extension methods for [`fs::DirEntry`].
@@ -496,9 +496,9 @@ pub trait DirEntryExt {
 }
 
 impl DirEntryExt for fs::DirEntry {
-    fn ino(&self) -> u64 {
+    fn ino(&self) -> u64 { os_fn!{{
         self.as_inner().ino()
-    }
+    }} }
 }
 
 /// Create a hard link.
@@ -511,14 +511,14 @@ pub fn link<P: AsRef<Path>, U: AsRef<Path>>(
     old_path: P,
     new_fd: &File,
     new_path: U,
-) -> io::Result<()> {
+) -> io::Result<()> { os_fn!{{
     old_fd.as_inner().as_inner().link(
         old_flags,
         osstr2str(old_path.as_ref().as_ref())?,
         new_fd.as_inner().as_inner(),
         osstr2str(new_path.as_ref().as_ref())?,
     )
-}
+}} }
 
 /// Rename a file or directory.
 ///
@@ -529,13 +529,13 @@ pub fn rename<P: AsRef<Path>, U: AsRef<Path>>(
     old_path: P,
     new_fd: &File,
     new_path: U,
-) -> io::Result<()> {
+) -> io::Result<()> { os_fn!{{
     old_fd.as_inner().as_inner().rename(
         osstr2str(old_path.as_ref().as_ref())?,
         new_fd.as_inner().as_inner(),
         osstr2str(new_path.as_ref().as_ref())?,
     )
-}
+}} }
 
 /// Create a symbolic link.
 ///
@@ -545,21 +545,21 @@ pub fn symlink<P: AsRef<Path>, U: AsRef<Path>>(
     old_path: P,
     fd: &File,
     new_path: U,
-) -> io::Result<()> {
+) -> io::Result<()> { os_fn!{{
     fd.as_inner()
         .as_inner()
         .symlink(osstr2str(old_path.as_ref().as_ref())?, osstr2str(new_path.as_ref().as_ref())?)
-}
+}} }
 
 /// Create a symbolic link.
 ///
 /// This is a convenience API similar to `std::os::unix::fs::symlink` and
 /// `std::os::windows::fs::symlink_file` and `std::os::windows::fs::symlink_dir`.
-pub fn symlink_path<P: AsRef<Path>, U: AsRef<Path>>(old_path: P, new_path: U) -> io::Result<()> {
+pub fn symlink_path<P: AsRef<Path>, U: AsRef<Path>>(old_path: P, new_path: U) -> io::Result<()> { os_fn!{{
     crate::sys::fs::symlink(old_path.as_ref(), new_path.as_ref())
-}
+}} }
 
-fn osstr2str(f: &OsStr) -> io::Result<&str> {
+fn osstr2str(f: &OsStr) -> io::Result<&str> { os_fn!{{
     f.to_str()
         .ok_or_else(|| io::const_io_error!(io::ErrorKind::Uncategorized, "input must be utf-8"))
-}
+}} }

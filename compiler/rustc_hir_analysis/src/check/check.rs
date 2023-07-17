@@ -263,7 +263,7 @@ fn check_opaque(tcx: TyCtxt<'_>, def_id: LocalDefId) {
     // `async-std` (and `pub async fn` in general).
     // Since rustdoc doesn't care about the concrete type behind `impl Trait`, just don't look at it!
     // See https://github.com/rust-lang/rust/issues/75100
-    if tcx.sess.opts.actually_rustdoc {
+    if tcx.sess.rustdoc_hack_swallow_type_errors() {
         return;
     }
 

@@ -804,7 +804,9 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
                         });
                     },
                     {
-                        tcx.ensure().clashing_extern_declarations(());
+                        if !tcx.sess.opts.actually_rustdoc {
+                            tcx.ensure().clashing_extern_declarations(());
+                        }
                     }
                 );
             },

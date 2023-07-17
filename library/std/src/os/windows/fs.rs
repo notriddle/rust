@@ -267,30 +267,30 @@ pub trait OpenOptionsExt {
 
 #[stable(feature = "open_options_ext", since = "1.10.0")]
 impl OpenOptionsExt for OpenOptions {
-    fn access_mode(&mut self, access: u32) -> &mut OpenOptions {
+    fn access_mode(&mut self, access: u32) -> &mut OpenOptions { os_fn! {{
         self.as_inner_mut().access_mode(access);
         self
-    }
+    }} }
 
-    fn share_mode(&mut self, share: u32) -> &mut OpenOptions {
+    fn share_mode(&mut self, share: u32) -> &mut OpenOptions { os_fn! {{
         self.as_inner_mut().share_mode(share);
         self
-    }
+    }} }
 
-    fn custom_flags(&mut self, flags: u32) -> &mut OpenOptions {
+    fn custom_flags(&mut self, flags: u32) -> &mut OpenOptions { os_fn! {{
         self.as_inner_mut().custom_flags(flags);
         self
-    }
+    }} }
 
-    fn attributes(&mut self, attributes: u32) -> &mut OpenOptions {
+    fn attributes(&mut self, attributes: u32) -> &mut OpenOptions { os_fn! {{
         self.as_inner_mut().attributes(attributes);
         self
-    }
+    }} }
 
-    fn security_qos_flags(&mut self, flags: u32) -> &mut OpenOptions {
+    fn security_qos_flags(&mut self, flags: u32) -> &mut OpenOptions { os_fn! {{
         self.as_inner_mut().security_qos_flags(flags);
         self
-    }
+    }} }
 }
 
 /// Windows-specific extensions to [`fs::Metadata`].
@@ -475,30 +475,30 @@ pub trait MetadataExt {
 
 #[stable(feature = "metadata_ext", since = "1.1.0")]
 impl MetadataExt for Metadata {
-    fn file_attributes(&self) -> u32 {
+    fn file_attributes(&self) -> u32 { os_fn! {{
         self.as_inner().attrs()
-    }
-    fn creation_time(&self) -> u64 {
+    }} }
+    fn creation_time(&self) -> u64 { os_fn! {{
         self.as_inner().created_u64()
-    }
-    fn last_access_time(&self) -> u64 {
+    }} }
+    fn last_access_time(&self) -> u64 { os_fn! {{
         self.as_inner().accessed_u64()
-    }
-    fn last_write_time(&self) -> u64 {
+    }} }
+    fn last_write_time(&self) -> u64 { os_fn! {{
         self.as_inner().modified_u64()
-    }
-    fn file_size(&self) -> u64 {
+    }} }
+    fn file_size(&self) -> u64 { os_fn! {{
         self.as_inner().size()
-    }
-    fn volume_serial_number(&self) -> Option<u32> {
+    }} }
+    fn volume_serial_number(&self) -> Option<u32> { os_fn! {{
         self.as_inner().volume_serial_number()
-    }
-    fn number_of_links(&self) -> Option<u32> {
+    }} }
+    fn number_of_links(&self) -> Option<u32> { os_fn! {{
         self.as_inner().number_of_links()
-    }
-    fn file_index(&self) -> Option<u64> {
+    }} }
+    fn file_index(&self) -> Option<u64> { os_fn! {{
         self.as_inner().file_index()
-    }
+    }} }
 }
 
 /// Windows-specific extensions to [`fs::FileType`].
@@ -519,12 +519,12 @@ impl Sealed for fs::FileType {}
 
 #[stable(feature = "windows_file_type_ext", since = "1.64.0")]
 impl FileTypeExt for fs::FileType {
-    fn is_symlink_dir(&self) -> bool {
+    fn is_symlink_dir(&self) -> bool { os_fn! {{
         self.as_inner().is_symlink_dir()
-    }
-    fn is_symlink_file(&self) -> bool {
+    }} }
+    fn is_symlink_file(&self) -> bool { os_fn! {{
         self.as_inner().is_symlink_file()
-    }
+    }} }
 }
 
 /// Windows-specific extensions to [`fs::FileTimes`].
@@ -537,10 +537,10 @@ pub trait FileTimesExt: Sealed {
 
 #[stable(feature = "file_set_times", since = "1.75.0")]
 impl FileTimesExt for fs::FileTimes {
-    fn set_created(mut self, t: SystemTime) -> Self {
+    fn set_created(mut self, t: SystemTime) -> Self { os_fn! {{
         self.as_inner_mut().set_created(t.into_inner());
         self
-    }
+    }} }
 }
 
 /// Creates a new symlink to a non-directory file on the filesystem.
@@ -578,9 +578,9 @@ impl FileTimesExt for fs::FileTimes {
 ///
 /// [symlink-security]: https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/create-symbolic-links
 #[stable(feature = "symlink", since = "1.1.0")]
-pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> { os_fn! {{
     sys::fs::symlink_inner(original.as_ref(), link.as_ref(), false)
-}
+}} }
 
 /// Creates a new symlink to a directory on the filesystem.
 ///
@@ -617,9 +617,9 @@ pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io:
 ///
 /// [symlink-security]: https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/create-symbolic-links
 #[stable(feature = "symlink", since = "1.1.0")]
-pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> { os_fn! {{
     sys::fs::symlink_inner(original.as_ref(), link.as_ref(), true)
-}
+}} }
 
 /// Create a junction point.
 ///
@@ -629,6 +629,6 @@ pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::
 ///
 /// If either path is not a local file path then this will fail.
 #[unstable(feature = "junction_point", issue = "121709")]
-pub fn junction_point<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+pub fn junction_point<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> { os_fn! {{
     sys::fs::junction_point(original.as_ref(), link.as_ref())
-}
+}} }

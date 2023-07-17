@@ -696,6 +696,7 @@ fn doc_std(
         .arg("--target-dir")
         .arg(&*target_dir.to_string_lossy())
         .arg("-Zskip-rustdoc-fingerprint")
+        .arg("-Ztypeck-docs")
         .rustdocflag("-Z")
         .rustdocflag("unstable-options")
         .rustdocflag("--resource-suffix")
@@ -799,6 +800,7 @@ impl Step for Rustc {
         cargo.rustdocflag("--enable-index-page");
         cargo.rustdocflag("-Zunstable-options");
         cargo.rustdocflag("-Znormalize-docs");
+        cargo.arg("-Ztypeck-docs");
         cargo.rustdocflag("--show-type-layout");
         // FIXME: `--generate-link-to-definition` tries to resolve cfged out code
         // see https://github.com/rust-lang/rust/pull/122066#issuecomment-1983049222

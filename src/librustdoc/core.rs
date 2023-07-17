@@ -201,8 +201,12 @@ pub(crate) fn create_config(
     RenderOptions { document_private, .. }: &RenderOptions,
     using_internal_features: Arc<AtomicBool>,
 ) -> rustc_interface::Config {
+    use rustc_middle::util::Providers;
+
     // Add the doc cfg into the doc build.
-    cfgs.push("doc".to_string());
+    if !unstable_opts.disable_cfg_doc {
+        cfgs.push("doc".to_string());
+    }
 
     let input = Input::File(input);
 
@@ -230,6 +234,7 @@ pub(crate) fn create_config(
     let resolve_doc_links =
         if *document_private { ResolveDocLinks::All } else { ResolveDocLinks::Exported };
     let test = scrape_examples_options.map(|opts| opts.scrape_tests).unwrap_or(false);
+    let typeck_docs = unstable_opts.typeck_docs;
     // plays with error output here!
     let sessopts = config::Options {
         maybe_sysroot,
@@ -253,21 +258,24 @@ pub(crate) fn create_config(
         ..Options::default()
     };
 
-    interface::Config {
-        opts: sessopts,
-        crate_cfg: cfgs,
-        crate_check_cfg: check_cfgs,
-        input,
-        output_file: None,
-        output_dir: None,
-        file_loader: None,
-        locale_resources: rustc_driver::DEFAULT_LOCALE_RESOURCES,
-        lint_caps,
-        psess_created: None,
-        hash_untracked_state: None,
-        register_lints: Some(Box::new(crate::lint::register_lints)),
-        override_queries: Some(|_sess, providers| {
-            // We do not register late module lints, so this only runs `MissingDoc`.
+    let override_queries = if typeck_docs {
+        fn override_query_typeck(_sess: &Session, providers: &mut Providers) {
+            // Disable most lints, so rustdoc only emits its own tool lints.
+            providers.lint_mod = |_, _| {};
+            // TODO(notriddle): this should filter rustdoc-specific lints.
+            //
+            // error: this lint expectation is unfulfilled
+            //   --> compiler/rustc_data_structures/src/owned_slice.rs:35:14
+            //   |
+            // 35 |     #[expect(dead_code)]
+            //   |              ^^^^^^^^^
+            //   |
+            //   = note: `-D unfulfilled-lint-expectations` implied by `-D warnings`
+            providers.lint_expectations = |_, _| { vec![] };
+        }
+        override_query_typeck
+    } else {
+        fn override_query_no_typeck(_sess: &Session, providers: &mut Providers) {
             // Most lints will require typechecking, so just don't run them.
             providers.lint_mod = |tcx, module_def_id| late_lint_mod(tcx, module_def_id, MissingDoc);
             // hack so that `used_trait_imports` won't try to call typeck
@@ -291,7 +299,24 @@ pub(crate) fn create_config(
                 EmitIgnoredResolutionErrors::new(tcx).visit_body(body);
                 (rustc_interface::DEFAULT_QUERY_PROVIDERS.typeck)(tcx, def_id)
             };
-        }),
+        }
+        override_query_no_typeck
+    };
+
+    interface::Config {
+        opts: sessopts,
+        crate_cfg: cfgs,
+        crate_check_cfg: check_cfgs,
+        input,
+        output_file: None,
+        output_dir: None,
+        file_loader: None,
+        locale_resources: rustc_driver::DEFAULT_LOCALE_RESOURCES,
+        lint_caps,
+        psess_created: None,
+        hash_untracked_state: None,
+        register_lints: Some(Box::new(crate::lint::register_lints)),
+        override_queries: Some(override_queries),
         make_codegen_backend: None,
         registry: rustc_driver::diagnostics_registry(),
         ice_file: None,
@@ -310,14 +335,17 @@ pub(crate) fn run_global_ctxt(
     // (see https://github.com/rust-lang/rust/pull/73566#issuecomment-656954425),
     // so type-check everything other than function bodies in this crate before running lints.
 
-    // NOTE: this does not call `tcx.analysis()` so that we won't
-    // typeck function bodies or run the default rustc lints.
-    // (see `override_queries` in the `config`)
-
-    // NOTE: These are copy/pasted from typeck/lib.rs and should be kept in sync with those changes.
-    let _ = tcx.sess.time("wf_checking", || {
-        tcx.hir().try_par_for_each_module(|module| tcx.ensure().check_mod_type_wf(module))
-    });
+    if tcx.sess.rustdoc_hack_swallow_type_errors() {
+        // NOTE: this does not call `tcx.analysis()` so that we won't
+        // typeck function bodies or run the default rustc lints.
+        // (see `override_queries` in the `config`)
+        let _ = tcx.sess.time("wf_checking", || {
+            // NOTE: These are copy/pasted from typeck/lib.rs and should be kept in sync with those changes.
+            tcx.hir().try_par_for_each_module(|module| tcx.ensure().check_mod_type_wf(module))
+        });
+    } else {
+        let _ = tcx.analysis(());
+    }
 
     if let Some(guar) = tcx.dcx().has_errors() {
         return Err(guar);

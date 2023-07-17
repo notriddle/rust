@@ -13,6 +13,7 @@ use crate::sys::fd::FileDesc;
 use crate::sys_common::{AsInner, AsInnerMut, FromInner, IntoInner};
 
 #[cfg(doc)]
+#[derive(Debug)]
 struct FileDesc;
 
 /// This type represents a file descriptor that refers to a process.
@@ -72,39 +73,39 @@ impl IntoInner<FileDesc> for PidFd {
 
 impl AsRawFd for PidFd {
     #[inline]
-    fn as_raw_fd(&self) -> RawFd {
+    fn as_raw_fd(&self) -> RawFd { os_fn!{{
         self.as_inner().as_raw_fd()
-    }
+    }} }
 }
 
 impl FromRawFd for PidFd {
-    unsafe fn from_raw_fd(fd: RawFd) -> Self {
+    unsafe fn from_raw_fd(fd: RawFd) -> Self { os_fn!{{
         Self::from_inner(FileDesc::from_raw_fd(fd))
-    }
+    }} }
 }
 
 impl IntoRawFd for PidFd {
-    fn into_raw_fd(self) -> RawFd {
+    fn into_raw_fd(self) -> RawFd { os_fn!{{
         self.into_inner().into_raw_fd()
-    }
+    }} }
 }
 
 impl AsFd for PidFd {
-    fn as_fd(&self) -> BorrowedFd<'_> {
+    fn as_fd(&self) -> BorrowedFd<'_> { os_fn!{{
         self.as_inner().as_fd()
-    }
+    }} }
 }
 
 impl From<OwnedFd> for PidFd {
-    fn from(fd: OwnedFd) -> Self {
+    fn from(fd: OwnedFd) -> Self { os_fn!{{
         Self::from_inner(FileDesc::from_inner(fd))
-    }
+    }} }
 }
 
 impl From<PidFd> for OwnedFd {
-    fn from(pid_fd: PidFd) -> Self {
+    fn from(pid_fd: PidFd) -> Self { os_fn!{{
         pid_fd.into_inner().into_inner()
-    }
+    }} }
 }
 
 /// Os-specific extensions for [`Child`]
@@ -165,8 +166,8 @@ pub trait CommandExt: Sealed {
 }
 
 impl CommandExt for process::Command {
-    fn create_pidfd(&mut self, val: bool) -> &mut process::Command {
+    fn create_pidfd(&mut self, val: bool) -> &mut process::Command { os_fn!{{
         self.as_inner_mut().create_pidfd(val);
         self
-    }
+    }} }
 }

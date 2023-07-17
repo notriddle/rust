@@ -11,15 +11,15 @@ use crate::thread;
 #[stable(feature = "thread_extensions", since = "1.9.0")]
 impl<T> AsRawHandle for thread::JoinHandle<T> {
     #[inline]
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn! {{
         self.as_inner().handle().as_raw_handle() as *mut _
-    }
+    }} }
 }
 
 #[stable(feature = "thread_extensions", since = "1.9.0")]
 impl<T> IntoRawHandle for thread::JoinHandle<T> {
     #[inline]
-    fn into_raw_handle(self) -> RawHandle {
+    fn into_raw_handle(self) -> RawHandle { os_fn! {{
         self.into_inner().into_handle().into_raw_handle() as *mut _
-    }
+    }} }
 }

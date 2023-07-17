@@ -1306,6 +1306,8 @@ impl<'a> Builder<'a> {
             cmd.arg("-Dwarnings");
         }
         cmd.arg("-Znormalize-docs");
+        cmd.arg("-Ztypeck-docs");
+
         cmd.args(linker_args(self, compiler.host, LldThreads::Yes));
         cmd
     }

@@ -17,7 +17,7 @@ pub trait TcpListenerExt {
 }
 
 impl TcpListenerExt for net::TcpListener {
-    fn sock_accept(&self, flags: u16) -> io::Result<u32> {
+    fn sock_accept(&self, flags: u16) -> io::Result<u32> { os_fn! {{
         self.as_inner().as_inner().as_inner().sock_accept(flags)
-    }
+    }} }
 }

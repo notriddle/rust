@@ -15,98 +15,98 @@ use crate::sys_common::{AsInner, AsInnerMut, FromInner, IntoInner};
 
 #[stable(feature = "process_extensions", since = "1.2.0")]
 impl FromRawHandle for process::Stdio {
-    unsafe fn from_raw_handle(handle: RawHandle) -> process::Stdio {
+    unsafe fn from_raw_handle(handle: RawHandle) -> process::Stdio { os_fn! {{
         let handle = sys::handle::Handle::from_raw_handle(handle as *mut _);
         let io = sys::process::Stdio::Handle(handle);
         process::Stdio::from_inner(io)
-    }
+    }} }
 }
 
 #[stable(feature = "io_safety", since = "1.63.0")]
 impl From<OwnedHandle> for process::Stdio {
     /// Takes ownership of a handle and returns a [`Stdio`](process::Stdio)
     /// that can attach a stream to it.
-    fn from(handle: OwnedHandle) -> process::Stdio {
+    fn from(handle: OwnedHandle) -> process::Stdio { os_fn! {{
         let handle = sys::handle::Handle::from_inner(handle);
         let io = sys::process::Stdio::Handle(handle);
         process::Stdio::from_inner(io)
-    }
+    }} }
 }
 
 #[stable(feature = "process_extensions", since = "1.2.0")]
 impl AsRawHandle for process::Child {
     #[inline]
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn! {{
         self.as_inner().handle().as_raw_handle() as *mut _
-    }
+    }} }
 }
 
 #[stable(feature = "io_safety", since = "1.63.0")]
 impl AsHandle for process::Child {
     #[inline]
-    fn as_handle(&self) -> BorrowedHandle<'_> {
+    fn as_handle(&self) -> BorrowedHandle<'_> { os_fn! {{
         self.as_inner().handle().as_handle()
-    }
+    }} }
 }
 
 #[stable(feature = "into_raw_os", since = "1.4.0")]
 impl IntoRawHandle for process::Child {
-    fn into_raw_handle(self) -> RawHandle {
+    fn into_raw_handle(self) -> RawHandle { os_fn!{{
         self.into_inner().into_handle().into_raw_handle() as *mut _
-    }
+    }} }
 }
 
 #[stable(feature = "io_safety", since = "1.63.0")]
 impl From<process::Child> for OwnedHandle {
     /// Takes ownership of a [`Child`](process::Child)'s process handle.
-    fn from(child: process::Child) -> OwnedHandle {
+    fn from(child: process::Child) -> OwnedHandle { os_fn!{{
         child.into_inner().into_handle().into_inner()
-    }
+    }} }
 }
 
 #[stable(feature = "process_extensions", since = "1.2.0")]
 impl AsRawHandle for process::ChildStdin {
     #[inline]
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn!{{
         self.as_inner().handle().as_raw_handle() as *mut _
-    }
+    }} }
 }
 
 #[stable(feature = "process_extensions", since = "1.2.0")]
 impl AsRawHandle for process::ChildStdout {
     #[inline]
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn!{{
         self.as_inner().handle().as_raw_handle() as *mut _
-    }
+    }} }
 }
 
 #[stable(feature = "process_extensions", since = "1.2.0")]
 impl AsRawHandle for process::ChildStderr {
     #[inline]
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn!{{
         self.as_inner().handle().as_raw_handle() as *mut _
-    }
+    }} }
 }
 
 #[stable(feature = "into_raw_os", since = "1.4.0")]
 impl IntoRawHandle for process::ChildStdin {
-    fn into_raw_handle(self) -> RawHandle {
+    fn into_raw_handle(self) -> RawHandle { os_fn!{{
         self.into_inner().into_handle().into_raw_handle() as *mut _
-    }
+    }} }
 }
 
 #[stable(feature = "into_raw_os", since = "1.4.0")]
 impl IntoRawHandle for process::ChildStdout {
-    fn into_raw_handle(self) -> RawHandle {
+    fn into_raw_handle(self) -> RawHandle { os_fn!{{
         self.into_inner().into_handle().into_raw_handle() as *mut _
-    }
+    }} }
 }
 
 #[stable(feature = "into_raw_os", since = "1.4.0")]
 impl IntoRawHandle for process::ChildStderr {
-    fn into_raw_handle(self) -> RawHandle {
+    fn into_raw_handle(self) -> RawHandle { os_fn!{{
         self.into_inner().into_handle().into_raw_handle() as *mut _
-    }
+    }} }
 }
 
 /// Create a `ChildStdin` from the provided `OwnedHandle`.
@@ -115,11 +115,11 @@ impl IntoRawHandle for process::ChildStderr {
 /// writing from and to it is implemented using asynchronous APIs.
 #[stable(feature = "child_stream_from_fd", since = "1.74.0")]
 impl From<OwnedHandle> for process::ChildStdin {
-    fn from(handle: OwnedHandle) -> process::ChildStdin {
+    fn from(handle: OwnedHandle) -> process::ChildStdin { os_fn!{{
         let handle = sys::handle::Handle::from_inner(handle);
         let pipe = sys::pipe::AnonPipe::from_inner(handle);
         process::ChildStdin::from_inner(pipe)
-    }
+    }} }
 }
 
 /// Create a `ChildStdout` from the provided `OwnedHandle`.
@@ -128,11 +128,11 @@ impl From<OwnedHandle> for process::ChildStdin {
 /// writing from and to it is implemented using asynchronous APIs.
 #[stable(feature = "child_stream_from_fd", since = "1.74.0")]
 impl From<OwnedHandle> for process::ChildStdout {
-    fn from(handle: OwnedHandle) -> process::ChildStdout {
+    fn from(handle: OwnedHandle) -> process::ChildStdout { os_fn!{{
         let handle = sys::handle::Handle::from_inner(handle);
         let pipe = sys::pipe::AnonPipe::from_inner(handle);
         process::ChildStdout::from_inner(pipe)
-    }
+    }} }
 }
 
 /// Create a `ChildStderr` from the provided `OwnedHandle`.
@@ -141,11 +141,11 @@ impl From<OwnedHandle> for process::ChildStdout {
 /// writing from and to it is implemented using asynchronous APIs.
 #[stable(feature = "child_stream_from_fd", since = "1.74.0")]
 impl From<OwnedHandle> for process::ChildStderr {
-    fn from(handle: OwnedHandle) -> process::ChildStderr {
+    fn from(handle: OwnedHandle) -> process::ChildStderr { os_fn!{{
         let handle = sys::handle::Handle::from_inner(handle);
         let pipe = sys::pipe::AnonPipe::from_inner(handle);
         process::ChildStderr::from_inner(pipe)
-    }
+    }} }
 }
 
 /// Windows-specific extensions to [`process::ExitStatus`].
@@ -162,9 +162,9 @@ pub trait ExitStatusExt: Sealed {
 
 #[stable(feature = "exit_status_from", since = "1.12.0")]
 impl ExitStatusExt for process::ExitStatus {
-    fn from_raw(raw: u32) -> Self {
+    fn from_raw(raw: u32) -> Self { os_fn! {{
         process::ExitStatus::from_inner(From::from(raw))
-    }
+    }} }
 }
 
 /// Windows-specific extensions to the [`process::Command`] builder.
@@ -350,20 +350,20 @@ pub trait CommandExt: Sealed {
 
 #[stable(feature = "windows_process_extensions", since = "1.16.0")]
 impl CommandExt for process::Command {
-    fn creation_flags(&mut self, flags: u32) -> &mut process::Command {
+    fn creation_flags(&mut self, flags: u32) -> &mut process::Command { os_fn!{{
         self.as_inner_mut().creation_flags(flags);
         self
-    }
+    }} }
 
-    fn force_quotes(&mut self, enabled: bool) -> &mut process::Command {
+    fn force_quotes(&mut self, enabled: bool) -> &mut process::Command { os_fn!{{
         self.as_inner_mut().force_quotes(enabled);
         self
-    }
+    }} }
 
-    fn raw_arg<S: AsRef<OsStr>>(&mut self, raw_text: S) -> &mut process::Command {
+    fn raw_arg<S: AsRef<OsStr>>(&mut self, raw_text: S) -> &mut process::Command { os_fn!{{
         self.as_inner_mut().raw_arg(raw_text.as_ref());
         self
-    }
+    }} }
 
     fn async_pipes(&mut self, always_async: bool) -> &mut process::Command {
         // FIXME: This currently has an intentional no-op implementation.
@@ -378,10 +378,10 @@ impl CommandExt for process::Command {
         &mut self,
         attribute: usize,
         value: T,
-    ) -> &mut process::Command {
+    ) -> &mut process::Command { os_fn!{{
         self.as_inner_mut().raw_attribute(attribute, value);
         self
-    }
+    }} }
 }
 
 #[unstable(feature = "windows_process_extensions_main_thread_handle", issue = "96723")]
@@ -393,9 +393,9 @@ pub trait ChildExt: Sealed {
 
 #[unstable(feature = "windows_process_extensions_main_thread_handle", issue = "96723")]
 impl ChildExt for process::Child {
-    fn main_thread_handle(&self) -> BorrowedHandle<'_> {
+    fn main_thread_handle(&self) -> BorrowedHandle<'_> { os_fn!{{
         self.handle.main_thread_handle()
-    }
+    }} }
 }
 
 /// Windows-specific extensions to [`process::ExitCode`].
@@ -416,7 +416,7 @@ pub trait ExitCodeExt: Sealed {
 
 #[unstable(feature = "windows_process_exit_code_from", issue = "111688")]
 impl ExitCodeExt for process::ExitCode {
-    fn from_raw(raw: u32) -> Self {
+    fn from_raw(raw: u32) -> Self { os_fn!{{
         process::ExitCode::from_inner(From::from(raw))
-    }
+    }} }
 }

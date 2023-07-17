@@ -211,6 +211,11 @@
 //! That's the general overview of loading crates in the compiler, but it's by
 //! no means all of the necessary details. Take a look at the rest of
 //! metadata::locator or metadata::creader for all the juicy details!
+//!
+//! Technically, `.doc.rmeta` files also exist, and have a higher priority than
+//! rlibs, but those are only ever used by rustdoc, not by the binary compiler.
+//! This code will locate them based on the `actually_rustdoc` session variable,
+//! and aggressively ignore them otherwise.
 
 use crate::creader::{Library, MetadataLoader};
 use crate::errors;
@@ -256,6 +261,7 @@ pub(crate) struct CrateLocator<'a> {
     pub triple: TargetTriple,
     pub filesearch: FileSearch<'a>,
     pub is_proc_macro: bool,
+    pub is_rustdoc: bool,
 
     // Mutable in-progress state or output.
     crate_rejections: CrateRejections,
@@ -275,6 +281,7 @@ impl CratePaths {
 
 #[derive(Copy, Clone, PartialEq)]
 pub(crate) enum CrateFlavor {
+    DocRmeta,
     Rlib,
     Rmeta,
     Dylib,
@@ -283,6 +290,7 @@ pub(crate) enum CrateFlavor {
 impl fmt::Display for CrateFlavor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match *self {
+            CrateFlavor::DocRmeta => "doc.rmeta",
             CrateFlavor::Rlib => "rlib",
             CrateFlavor::Rmeta => "rmeta",
             CrateFlavor::Dylib => "dylib",
@@ -293,6 +301,7 @@ impl fmt::Display for CrateFlavor {
 impl IntoDiagArg for CrateFlavor {
     fn into_diag_arg(self) -> rustc_errors::DiagArgValue {
         match self {
+            CrateFlavor::DocRmeta => DiagArgValue::Str(Cow::Borrowed("doc.rmeta")),
             CrateFlavor::Rlib => DiagArgValue::Str(Cow::Borrowed("rlib")),
             CrateFlavor::Rmeta => DiagArgValue::Str(Cow::Borrowed("rmeta")),
             CrateFlavor::Dylib => DiagArgValue::Str(Cow::Borrowed("dylib")),
@@ -315,7 +324,7 @@ impl<'a> CrateLocator<'a> {
         // If we're producing an rlib, then we don't need object code.
         // Or, if we're not producing object code, then we don't need it either
         // (e.g., if we're a cdylib but emitting just metadata).
-        let only_needs_metadata = is_rlib || !needs_object_code;
+        let only_needs_metadata = is_rlib || !needs_object_code || sess.opts.actually_rustdoc;
 
         CrateLocator {
             only_needs_metadata,
@@ -351,6 +360,7 @@ impl<'a> CrateLocator<'a> {
                 sess.target_filesearch(path_kind)
             },
             is_proc_macro: false,
+            is_rustdoc: sess.opts.actually_rustdoc,
             crate_rejections: CrateRejections::default(),
         }
     }
@@ -389,12 +399,13 @@ impl<'a> CrateLocator<'a> {
         let staticlib_prefix =
             &format!("{}{}{}", self.target.staticlib_prefix, self.crate_name, extra_prefix);
 
+        let doc_rmeta_suffix = ".doc.rmeta";
         let rmeta_suffix = ".rmeta";
         let rlib_suffix = ".rlib";
         let dylib_suffix = &self.target.dll_suffix;
         let staticlib_suffix = &self.target.staticlib_suffix;
 
-        let mut candidates: FxHashMap<_, (FxHashMap<_, _>, FxHashMap<_, _>, FxHashMap<_, _>)> =
+        let mut candidates: FxHashMap<_, (FxHashMap<_, _>, FxHashMap<_, _>, FxHashMap<_, _>, FxHashMap<_, _>)> =
             Default::default();
 
         // First, find all possible candidate rlibs and dylibs purely based on
@@ -423,7 +434,18 @@ impl<'a> CrateLocator<'a> {
                 debug!("testing {}", spf.path.display());
 
                 let f = &spf.file_name_str;
-                let (hash, kind) = if f.starts_with(rlib_prefix) && f.ends_with(rlib_suffix) {
+                let (hash, kind) = if f.starts_with(rmeta_prefix) && f.ends_with(doc_rmeta_suffix) {
+                    if !self.is_rustdoc {
+                        // .doc.rmeta files are used to author documentation pages that
+                        // include all supported platforms.
+                        //
+                        // Since this file contains type definitions for multiple
+                        // platforms, building actual code with it can produce linker
+                        // errors, or errors about inline assembler.
+                        continue;
+                    }
+                    (&f[rmeta_prefix.len()..(f.len() - doc_rmeta_suffix.len())], CrateFlavor::DocRmeta)
+                } else if f.starts_with(rlib_prefix) && f.ends_with(rlib_suffix) {
                     (&f[rlib_prefix.len()..(f.len() - rlib_suffix.len())], CrateFlavor::Rlib)
                 } else if f.starts_with(rmeta_prefix) && f.ends_with(rmeta_suffix) {
                     (&f[rmeta_prefix.len()..(f.len() - rmeta_suffix.len())], CrateFlavor::Rmeta)
@@ -441,13 +463,14 @@ impl<'a> CrateLocator<'a> {
 
                 info!("lib candidate: {}", spf.path.display());
 
-                let (rlibs, rmetas, dylibs) = candidates.entry(hash.to_string()).or_default();
+                let (doc_rmetas, rlibs, rmetas, dylibs) = candidates.entry(hash.to_string()).or_default();
                 let path = try_canonicalize(&spf.path).unwrap_or_else(|_| spf.path.clone());
                 if seen_paths.contains(&path) {
                     continue;
                 };
                 seen_paths.insert(path.clone());
                 match kind {
+                    CrateFlavor::DocRmeta => doc_rmetas.insert(path, search_path.kind),
                     CrateFlavor::Rlib => rlibs.insert(path, search_path.kind),
                     CrateFlavor::Rmeta => rmetas.insert(path, search_path.kind),
                     CrateFlavor::Dylib => dylibs.insert(path, search_path.kind),
@@ -464,10 +487,23 @@ impl<'a> CrateLocator<'a> {
         // libraries corresponds to the crate id and hash criteria that this
         // search is being performed for.
         let mut libraries = FxHashMap::default();
-        for (_hash, (rlibs, rmetas, dylibs)) in candidates {
+        let mut doc_rmeta_libraries = FxHashMap::default();
+        for (_hash, (doc_rmetas, rlibs, rmetas, dylibs)) in candidates {
+            if !doc_rmetas.is_empty() {
+                assert!(self.is_rustdoc);
+                if let Some((svh, lib)) = self.extract_lib(FxHashMap::default(), doc_rmetas, FxHashMap::default())? {
+                    doc_rmeta_libraries.insert(svh, lib);
+                }
+            }
             if let Some((svh, lib)) = self.extract_lib(rlibs, rmetas, dylibs)? {
                 libraries.insert(svh, lib);
             }
+        }
+        if !doc_rmeta_libraries.is_empty() {
+            // doc.rmeta files might have different hashes than code libraries
+            // they still have categorical higher priority
+            assert!(self.is_rustdoc);
+            libraries = doc_rmeta_libraries;
         }
 
         // Having now translated all relevant found hashes into libraries, see
@@ -834,7 +870,7 @@ fn get_metadata_section<'p>(
                 slice_owned(inflated, Deref::deref)
             }
         }
-        CrateFlavor::Rmeta => {
+        CrateFlavor::Rmeta | CrateFlavor::DocRmeta => {
             // mmap the file, because only a small fraction of it is read.
             let file = std::fs::File::open(filename).map_err(|_| {
                 MetadataError::LoadFailure(format!(

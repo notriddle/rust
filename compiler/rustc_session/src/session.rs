@@ -344,6 +344,19 @@ impl Session {
         self.unstable_options() && !self.opts.actually_rustdoc
     }
 
+    /// Returns `true` if this is rustdoc and it's configured with the legacy
+    /// type error-swallowing behavior. This can cause ICEs and strange corner
+    /// cases where rustdoc doesn't infer auto traits correctly, but is needed
+    /// for backwards compatibility with older editions.
+    ///
+    /// Note that, even when typechecking docs is turend on, rustdoc still
+    /// supports all ASM syntaxes and target features (since it doesn't have
+    /// to actually generate code or link with platform libraries). That stuff
+    /// should read `actually_rustdoc` directly.
+    pub fn rustdoc_hack_swallow_type_errors(&self) -> bool {
+        self.opts.actually_rustdoc && !self.opts.unstable_opts.typeck_docs
+    }
+
     pub fn instrument_coverage(&self) -> bool {
         self.opts.cg.instrument_coverage() != InstrumentCoverage::No
     }

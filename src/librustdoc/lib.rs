@@ -763,11 +763,13 @@ fn main_args(
     // then generated from the cleaned AST of the crate. This runs all the
     // plug/cleaning passes.
     let crate_version = options.crate_version.clone();
+    let out_dir = render_options.output.clone();
 
     let output_format = options.output_format;
     let scrape_examples_options = options.scrape_examples_options.clone();
     let bin_crate = options.bin_crate;
 
+    let metadata_extra = options.codegen_options.extra_filename.clone();
     let config = core::create_config(options, &render_options, using_internal_features);
 
     interface::run_compiler(config, |compiler| {
@@ -813,14 +815,24 @@ fn main_args(
                 }
 
                 info!("going to format");
-                match output_format {
+                let result = match output_format {
                     config::OutputFormat::Html => sess.time("render_html", || {
                         run_renderer::<html::render::Context<'_>>(krate, render_opts, cache, tcx)
                     }),
                     config::OutputFormat::Json => sess.time("render_json", || {
                         run_renderer::<json::JsonRenderer<'_>>(krate, render_opts, cache, tcx)
                     }),
-                }
+                    config::OutputFormat::Metadata => {
+                        let metadata_output_path = out_dir.join(format!(
+                            "lib{crate_name}{metadata_extra}.doc.rmeta",
+                            crate_name = krate.name(tcx),
+                        ));
+                        rustc_metadata::encode_metadata(tcx, &metadata_output_path);
+                        Ok(())
+                    },
+                };
+
+                result
             })
         })
     })

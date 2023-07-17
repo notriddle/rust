@@ -1798,7 +1798,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
     }
 
     fn encode_proc_macros(&mut self) -> Option<ProcMacroData> {
-        let is_proc_macro = self.tcx.crate_types().contains(&CrateType::ProcMacro);
+        let is_proc_macro = self.is_proc_macro;
         if is_proc_macro {
             let tcx = self.tcx;
             let hir = tcx.hir();
@@ -2253,7 +2253,11 @@ pub fn encode_metadata(tcx: TyCtxt<'_>, path: &Path) {
         source_file_cache,
         interpret_allocs: Default::default(),
         required_source_files,
-        is_proc_macro: tcx.crate_types().contains(&CrateType::ProcMacro),
+        // When generating doc.rmeta files, proc macro crates aren't special.
+        // The "real" proc macro gets generated for the host, and contains only enough metadata
+        // for the compiler to call into it. The documentation metadata that gets used for
+        // inlining needs to contain all of the metadata.
+        is_proc_macro: tcx.crate_types().contains(&CrateType::ProcMacro) && !tcx.sess.opts.actually_rustdoc,
         hygiene_ctxt: &hygiene_ctxt,
         symbol_table: Default::default(),
     };

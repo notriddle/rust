@@ -789,11 +789,16 @@ pub struct Process {
 impl Process {
     #[cfg(target_os = "linux")]
     unsafe fn new(pid: pid_t, pidfd: pid_t) -> Self {
-        use crate::os::unix::io::FromRawFd;
-        use crate::sys_common::FromInner;
-        // Safety: If `pidfd` is nonnegative, we assume it's valid and otherwise unowned.
-        let pidfd = (pidfd >= 0).then(|| PidFd::from_inner(sys::fd::FileDesc::from_raw_fd(pidfd)));
-        Process { pid, status: None, pidfd }
+        #[cfg(doc)] {
+            unimplemented!()
+        }
+        #[cfg(not(doc))] {
+            use crate::os::unix::io::FromRawFd;
+            use crate::sys_common::FromInner;
+            // Safety: If `pidfd` is nonnegative, we assume it's valid and otherwise unowned.
+            let pidfd = (pidfd >= 0).then(|| PidFd::from_inner(sys::fd::FileDesc::from_raw_fd(pidfd)));
+            Process { pid, status: None, pidfd }
+        }
     }
 
     #[cfg(not(target_os = "linux"))]

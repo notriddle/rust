@@ -91,9 +91,9 @@ pub trait OsStringExt: Sealed {
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl OsStringExt for OsString {
-    fn from_wide(wide: &[u16]) -> OsString {
+    fn from_wide(wide: &[u16]) -> OsString { os_fn!{{
         FromInner::from_inner(Buf { inner: Wtf8Buf::from_wide(wide) })
-    }
+    }} }
 }
 
 /// Windows-specific extensions to [`OsStr`].
@@ -130,7 +130,7 @@ pub trait OsStrExt: Sealed {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl OsStrExt for OsStr {
     #[inline]
-    fn encode_wide(&self) -> EncodeWide<'_> {
+    fn encode_wide(&self) -> EncodeWide<'_> { os_fn!{{
         self.as_inner().inner.encode_wide()
-    }
+    }} }
 }

@@ -198,47 +198,47 @@ pub trait CommandExt: Sealed {
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl CommandExt for process::Command {
-    fn uid(&mut self, id: UserId) -> &mut process::Command {
+    fn uid(&mut self, id: UserId) -> &mut process::Command { os_fn! {{
         self.as_inner_mut().uid(id);
         self
-    }
+    }} }
 
-    fn gid(&mut self, id: GroupId) -> &mut process::Command {
+    fn gid(&mut self, id: GroupId) -> &mut process::Command { os_fn! {{
         self.as_inner_mut().gid(id);
         self
-    }
+    }} }
 
-    fn groups(&mut self, groups: &[GroupId]) -> &mut process::Command {
+    fn groups(&mut self, groups: &[GroupId]) -> &mut process::Command { os_fn! {{
         self.as_inner_mut().groups(groups);
         self
-    }
+    }} }
 
     unsafe fn pre_exec<F>(&mut self, f: F) -> &mut process::Command
     where
         F: FnMut() -> io::Result<()> + Send + Sync + 'static,
-    {
+    { os_fn! {{
         self.as_inner_mut().pre_exec(Box::new(f));
         self
-    }
+    }} }
 
-    fn exec(&mut self) -> io::Error {
+    fn exec(&mut self) -> io::Error { os_fn! {{
         // NOTE: This may *not* be safe to call after `libc::fork`, because it
         // may allocate. That may be worth fixing at some point in the future.
         self.as_inner_mut().exec(sys::process::Stdio::Inherit)
-    }
+    }} }
 
     fn arg0<S>(&mut self, arg: S) -> &mut process::Command
     where
         S: AsRef<OsStr>,
-    {
+    { os_fn! {{
         self.as_inner_mut().set_arg_0(arg.as_ref());
         self
-    }
+    }} }
 
-    fn process_group(&mut self, pgroup: i32) -> &mut process::Command {
+    fn process_group(&mut self, pgroup: i32) -> &mut process::Command { os_fn! {{
         self.as_inner_mut().pgroup(pgroup);
         self
-    }
+    }} }
 }
 
 /// Unix-specific extensions to [`process::ExitStatus`] and
@@ -303,58 +303,58 @@ pub trait ExitStatusExt: Sealed {
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl ExitStatusExt for process::ExitStatus {
-    fn from_raw(raw: i32) -> Self {
+    fn from_raw(raw: i32) -> Self { os_fn! {{
         process::ExitStatus::from_inner(From::from(raw))
-    }
+    }} }
 
-    fn signal(&self) -> Option<i32> {
+    fn signal(&self) -> Option<i32> { os_fn! {{
         self.as_inner().signal()
-    }
+    }} }
 
-    fn core_dumped(&self) -> bool {
+    fn core_dumped(&self) -> bool { os_fn! {{
         self.as_inner().core_dumped()
-    }
+    }} }
 
-    fn stopped_signal(&self) -> Option<i32> {
+    fn stopped_signal(&self) -> Option<i32> { os_fn! {{
         self.as_inner().stopped_signal()
-    }
+    }} }
 
-    fn continued(&self) -> bool {
+    fn continued(&self) -> bool { os_fn! {{
         self.as_inner().continued()
-    }
+    }} }
 
-    fn into_raw(self) -> i32 {
+    fn into_raw(self) -> i32 { os_fn! {{
         self.as_inner().into_raw().into()
-    }
+    }} }
 }
 
 #[unstable(feature = "exit_status_error", issue = "84908")]
 impl ExitStatusExt for process::ExitStatusError {
-    fn from_raw(raw: i32) -> Self {
+    fn from_raw(raw: i32) -> Self { os_fn! {{
         process::ExitStatus::from_raw(raw)
             .exit_ok()
             .expect_err("<ExitStatusError as ExitStatusExt>::from_raw(0) but zero is not an error")
-    }
+    }} }
 
-    fn signal(&self) -> Option<i32> {
+    fn signal(&self) -> Option<i32> { os_fn! {{
         self.into_status().signal()
-    }
+    }} }
 
-    fn core_dumped(&self) -> bool {
+    fn core_dumped(&self) -> bool { os_fn! {{
         self.into_status().core_dumped()
-    }
+    }} }
 
-    fn stopped_signal(&self) -> Option<i32> {
+    fn stopped_signal(&self) -> Option<i32> { os_fn! {{
         self.into_status().stopped_signal()
-    }
+    }} }
 
-    fn continued(&self) -> bool {
+    fn continued(&self) -> bool { os_fn! {{
         self.into_status().continued()
-    }
+    }} }
 
-    fn into_raw(self) -> i32 {
+    fn into_raw(self) -> i32 { os_fn! {{
         self.into_status().into_raw()
-    }
+    }} }
 }
 
 #[stable(feature = "process_extensions", since = "1.2.0")]

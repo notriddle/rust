@@ -35,6 +35,7 @@ pub(crate) enum OutputFormat {
     Json,
     #[default]
     Html,
+    Metadata,
 }
 
 impl OutputFormat {
@@ -50,6 +51,7 @@ impl TryFrom<&str> for OutputFormat {
         match value {
             "json" => Ok(OutputFormat::Json),
             "html" => Ok(OutputFormat::Html),
+            "metadata" => Ok(OutputFormat::Metadata),
             _ => Err(format!("unknown output format `{value}`")),
         }
     }
@@ -704,7 +706,12 @@ impl Options {
             matches.opt_present("extern-html-root-takes-precedence");
         let html_no_source = matches.opt_present("html-no-source");
 
-        if generate_link_to_definition && (show_coverage || output_format != OutputFormat::Html) {
+        // TODO (notriddle):
+        // RUSTDOCFLAGS get passed by cargo to rustdoc, even when it's running rustdoc in metadata mode,
+        // so it's easier to allow this for metadata output format. I'm not sure if this makes sense,
+        // but since some rustdocflags *do* actually impact the metadata that's generated, it's not clear
+        // if Cargo's in the wrong here either.
+        if generate_link_to_definition && (show_coverage || output_format == OutputFormat::Json) {
             dcx.fatal(
                 "--generate-link-to-definition option can only be used with HTML output format",
             );

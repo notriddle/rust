@@ -1717,7 +1717,7 @@ fn effective_visibilities(tcx: TyCtxt<'_>, (): ()) -> &EffectiveVisibilities {
         // HACK(jynelson): trying to infer the type of `impl Trait` breaks `async-std` (and
         // `pub async fn` in general). Since rustdoc never needs to do codegen and doesn't
         // care about link-time reachability, keep them unreachable (issue #75100).
-        impl_trait_pass: !tcx.sess.opts.actually_rustdoc,
+        impl_trait_pass: !tcx.sess.rustdoc_hack_swallow_type_errors(),
         changed: false,
     };
 

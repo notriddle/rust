@@ -5,6 +5,37 @@
 
 pub mod raw;
 
+/// This macro is used to prevent OS-specific items from attempting to typecheck when
+/// they are only used for documentation.
+///
+/// When compiling it for real, it expands to the list of statements. When compiled
+/// for documentation, it just panics. **Do not use this in `const` functions!**
+/// 
+/// # Example
+/// 
+/// ```rust,no_compile (private macro)
+/// pub struct WindowsArgs;
+/// impl Iterator for WindowsArgs {
+///     type Item = std::ffi::OsStr;
+///     fn next(&mut self) -> Self::Item { os_fn! {
+///         // ...
+///         # unimplemented!()
+///     }
+/// }}
+/// ```
+macro_rules! os_fn {
+    ($block:block) => {
+        #[cfg(doc)]
+        {
+            unimplemented!()
+        }
+        #[cfg(not(doc))]
+        {
+            $block
+        }
+    }
+}
+
 // The code below could be written clearer using `cfg_if!`. However, the items below are
 // publicly exported by `std` and external tools can have trouble analysing them because of the use
 // of a macro that is not vendored by Rust and included in the toolchain.

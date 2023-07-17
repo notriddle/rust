@@ -96,56 +96,56 @@ pub trait IntoRawHandle {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl AsRawHandle for fs::File {
     #[inline]
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn! {{
         self.as_inner().as_raw_handle() as RawHandle
-    }
+    }} }
 }
 
 #[stable(feature = "asraw_stdio", since = "1.21.0")]
 impl AsRawHandle for io::Stdin {
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn! {{
         stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_INPUT_HANDLE) as RawHandle })
-    }
+    }} }
 }
 
 #[stable(feature = "asraw_stdio", since = "1.21.0")]
 impl AsRawHandle for io::Stdout {
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn! {{
         stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_OUTPUT_HANDLE) as RawHandle })
-    }
+    }} }
 }
 
 #[stable(feature = "asraw_stdio", since = "1.21.0")]
 impl AsRawHandle for io::Stderr {
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn! {{
         stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_ERROR_HANDLE) as RawHandle })
-    }
+    }} }
 }
 
 #[stable(feature = "asraw_stdio_locks", since = "1.35.0")]
 impl<'a> AsRawHandle for io::StdinLock<'a> {
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn! {{
         stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_INPUT_HANDLE) as RawHandle })
-    }
+    }} }
 }
 
 #[stable(feature = "asraw_stdio_locks", since = "1.35.0")]
 impl<'a> AsRawHandle for io::StdoutLock<'a> {
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn! {{
         stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_OUTPUT_HANDLE) as RawHandle })
-    }
+    }} }
 }
 
 #[stable(feature = "asraw_stdio_locks", since = "1.35.0")]
 impl<'a> AsRawHandle for io::StderrLock<'a> {
-    fn as_raw_handle(&self) -> RawHandle {
+    fn as_raw_handle(&self) -> RawHandle { os_fn! {{
         stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_ERROR_HANDLE) as RawHandle })
-    }
+    }} }
 }
 
 // Translate a handle returned from `GetStdHandle` into a handle to return to
 // the user.
-fn stdio_handle(raw: RawHandle) -> RawHandle {
+fn stdio_handle(raw: RawHandle) -> RawHandle { os_fn! {{
     // `GetStdHandle` isn't expected to actually fail, so when it returns
     // `INVALID_HANDLE_VALUE`, it means we were launched from a parent which
     // didn't provide us with stdio handles, such as a parent with a detached
@@ -153,25 +153,25 @@ fn stdio_handle(raw: RawHandle) -> RawHandle {
     // with what they'd get in the parent, and which avoids the problem that
     // `INVALID_HANDLE_VALUE` aliases the current process handle.
     if raw == sys::c::INVALID_HANDLE_VALUE { ptr::null_mut() } else { raw }
-}
+}} }
 
 #[stable(feature = "from_raw_os", since = "1.1.0")]
 impl FromRawHandle for fs::File {
     #[inline]
-    unsafe fn from_raw_handle(handle: RawHandle) -> fs::File {
+    unsafe fn from_raw_handle(handle: RawHandle) -> fs::File { os_fn! {{
         let handle = handle as sys::c::HANDLE;
         fs::File::from_inner(sys::fs::File::from_inner(FromInner::from_inner(
             OwnedHandle::from_raw_handle(handle),
         )))
-    }
+    }} }
 }
 
 #[stable(feature = "into_raw_os", since = "1.4.0")]
 impl IntoRawHandle for fs::File {
     #[inline]
-    fn into_raw_handle(self) -> RawHandle {
+    fn into_raw_handle(self) -> RawHandle { os_fn! {{
         self.into_inner().into_raw_handle() as *mut _
-    }
+    }} }
 }
 
 /// Extracts raw sockets.
@@ -237,70 +237,70 @@ pub trait IntoRawSocket {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl AsRawSocket for net::TcpStream {
     #[inline]
-    fn as_raw_socket(&self) -> RawSocket {
+    fn as_raw_socket(&self) -> RawSocket { os_fn! {{
         self.as_inner().socket().as_raw_socket()
-    }
+    }} }
 }
 #[stable(feature = "rust1", since = "1.0.0")]
 impl AsRawSocket for net::TcpListener {
     #[inline]
-    fn as_raw_socket(&self) -> RawSocket {
+    fn as_raw_socket(&self) -> RawSocket { os_fn! {{
         self.as_inner().socket().as_raw_socket()
-    }
+    }} }
 }
 #[stable(feature = "rust1", since = "1.0.0")]
 impl AsRawSocket for net::UdpSocket {
     #[inline]
-    fn as_raw_socket(&self) -> RawSocket {
+    fn as_raw_socket(&self) -> RawSocket { os_fn! {{
         self.as_inner().socket().as_raw_socket()
-    }
+    }} }
 }
 
 #[stable(feature = "from_raw_os", since = "1.1.0")]
 impl FromRawSocket for net::TcpStream {
     #[inline]
-    unsafe fn from_raw_socket(sock: RawSocket) -> net::TcpStream {
+    unsafe fn from_raw_socket(sock: RawSocket) -> net::TcpStream { os_fn! {{
         let sock = sys::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
         net::TcpStream::from_inner(sys_common::net::TcpStream::from_inner(sock))
-    }
+    }} }
 }
 #[stable(feature = "from_raw_os", since = "1.1.0")]
 impl FromRawSocket for net::TcpListener {
     #[inline]
-    unsafe fn from_raw_socket(sock: RawSocket) -> net::TcpListener {
+    unsafe fn from_raw_socket(sock: RawSocket) -> net::TcpListener { os_fn! {{
         let sock = sys::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
         net::TcpListener::from_inner(sys_common::net::TcpListener::from_inner(sock))
-    }
+    }} }
 }
 #[stable(feature = "from_raw_os", since = "1.1.0")]
 impl FromRawSocket for net::UdpSocket {
     #[inline]
-    unsafe fn from_raw_socket(sock: RawSocket) -> net::UdpSocket {
+    unsafe fn from_raw_socket(sock: RawSocket) -> net::UdpSocket { os_fn! {{
         let sock = sys::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
         net::UdpSocket::from_inner(sys_common::net::UdpSocket::from_inner(sock))
-    }
+    }} }
 }
 
 #[stable(feature = "into_raw_os", since = "1.4.0")]
 impl IntoRawSocket for net::TcpStream {
     #[inline]
-    fn into_raw_socket(self) -> RawSocket {
+    fn into_raw_socket(self) -> RawSocket { os_fn! {{
         self.into_inner().into_socket().into_inner().into_raw_socket()
-    }
+    }} }
 }
 
 #[stable(feature = "into_raw_os", since = "1.4.0")]
 impl IntoRawSocket for net::TcpListener {
     #[inline]
-    fn into_raw_socket(self) -> RawSocket {
+    fn into_raw_socket(self) -> RawSocket { os_fn! {{
         self.into_inner().into_socket().into_inner().into_raw_socket()
-    }
+    }} }
 }
 
 #[stable(feature = "into_raw_os", since = "1.4.0")]
 impl IntoRawSocket for net::UdpSocket {
     #[inline]
-    fn into_raw_socket(self) -> RawSocket {
+    fn into_raw_socket(self) -> RawSocket { os_fn! {{
         self.into_inner().into_socket().into_inner().into_raw_socket()
-    }
+    }} }
 }

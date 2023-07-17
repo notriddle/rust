@@ -4037,7 +4037,7 @@ impl<'a: 'ast, 'b, 'ast, 'tcx> LateResolutionVisitor<'a, 'b, 'ast, 'tcx> {
     #[inline]
     /// If we're actually rustdoc then avoid giving a name resolution error for `cfg()` items.
     fn should_report_errs(&self) -> bool {
-        !(self.r.tcx.sess.opts.actually_rustdoc && self.in_func_body)
+        !(self.r.tcx.sess.rustdoc_hack_swallow_type_errors() && self.in_func_body)
     }
 
     // Resolve in alternative namespaces if resolution in the primary namespace fails.

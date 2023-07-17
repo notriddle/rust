@@ -74,24 +74,24 @@ impl BorrowedSocket<'_> {
     #[inline]
     #[rustc_const_stable(feature = "io_safety", since = "1.63.0")]
     #[stable(feature = "io_safety", since = "1.63.0")]
-    pub const unsafe fn borrow_raw(socket: RawSocket) -> Self {
+    pub const unsafe fn borrow_raw(socket: RawSocket) -> Self { os_fn! {{
         assert!(socket != sys::c::INVALID_SOCKET as RawSocket);
         Self { socket, _phantom: PhantomData }
-    }
+    }} }
 }
 
 impl OwnedSocket {
     /// Creates a new `OwnedSocket` instance that shares the same underlying
     /// object as the existing `OwnedSocket` instance.
     #[stable(feature = "io_safety", since = "1.63.0")]
-    pub fn try_clone(&self) -> io::Result<Self> {
+    pub fn try_clone(&self) -> io::Result<Self> { os_fn! {{
         self.as_socket().try_clone_to_owned()
-    }
+    }} }
 
     // FIXME(strict_provenance_magic): we defined RawSocket to be a u64 ;-;
     #[allow(fuzzy_provenance_casts)]
     #[cfg(not(target_vendor = "uwp"))]
-    pub(crate) fn set_no_inherit(&self) -> io::Result<()> {
+    pub(crate) fn set_no_inherit(&self) -> io::Result<()> { os_fn!{{
         cvt(unsafe {
             sys::c::SetHandleInformation(
                 self.as_raw_socket() as sys::c::HANDLE,
@@ -100,19 +100,19 @@ impl OwnedSocket {
             )
         })
         .map(drop)
-    }
+    }} }
 
     #[cfg(target_vendor = "uwp")]
-    pub(crate) fn set_no_inherit(&self) -> io::Result<()> {
+    pub(crate) fn set_no_inherit(&self) -> io::Result<()> { os_fn!{{
         Err(io::const_io_error!(io::ErrorKind::Unsupported, "Unavailable on UWP"))
-    }
+    }} }
 }
 
 impl BorrowedSocket<'_> {
     /// Creates a new `OwnedSocket` instance that shares the same underlying
     /// object as the existing `BorrowedSocket` instance.
     #[stable(feature = "io_safety", since = "1.63.0")]
-    pub fn try_clone_to_owned(&self) -> io::Result<OwnedSocket> {
+    pub fn try_clone_to_owned(&self) -> io::Result<OwnedSocket> { os_fn!{{
         let mut info = unsafe { mem::zeroed::<sys::c::WSAPROTOCOL_INFOW>() };
         let result = unsafe {
             sys::c::WSADuplicateSocketW(
@@ -163,13 +163,13 @@ impl BorrowedSocket<'_> {
                 Ok(socket)
             }
         }
-    }
+    }} }
 }
 
 /// Returns the last error from the Windows socket interface.
-fn last_error() -> io::Error {
+fn last_error() -> io::Error { os_fn! {{
     io::Error::from_raw_os_error(unsafe { sys::c::WSAGetLastError() })
-}
+}} }
 
 #[stable(feature = "io_safety", since = "1.63.0")]
 impl AsRawSocket for BorrowedSocket<'_> {
@@ -200,20 +200,20 @@ impl IntoRawSocket for OwnedSocket {
 #[stable(feature = "io_safety", since = "1.63.0")]
 impl FromRawSocket for OwnedSocket {
     #[inline]
-    unsafe fn from_raw_socket(socket: RawSocket) -> Self {
+    unsafe fn from_raw_socket(socket: RawSocket) -> Self { os_fn!{{
         debug_assert_ne!(socket, sys::c::INVALID_SOCKET as RawSocket);
         Self { socket }
-    }
+    }} }
 }
 
 #[stable(feature = "io_safety", since = "1.63.0")]
 impl Drop for OwnedSocket {
     #[inline]
-    fn drop(&mut self) {
+    fn drop(&mut self) { os_fn!{{
         unsafe {
             let _ = sys::c::closesocket(self.socket as sys::c::SOCKET);
         }
-    }
+    }} }
 }
 
 #[stable(feature = "io_safety", since = "1.63.0")]

@@ -235,6 +235,46 @@ impl Step for Std {
             }
         }
 
+        if compiler.stage != 0 {
+            let mut cargo =
+                builder::Cargo::new(builder, compiler, Mode::Std, SourceType::InTree, target, "doc");
+            std_cargo(builder, target, compiler.stage, &mut cargo);
+            cargo
+                .arg("-Zskip-rustdoc-fingerprint")
+                .arg("-Ztypeck-docs")
+                .rustdocflag("-Z")
+                .rustdocflag("unstable-options")
+                .rustdocflag("--resource-suffix")
+                .rustdocflag(&builder.version)
+                .rustdocflag("--output-format")
+                .rustdocflag("metadata");
+
+            for krate in &*self.crates {
+                if krate == "sysroot" {
+                    // The sysroot crate is an implementation detail, don't include it in public docs.
+                    continue;
+                }
+                cargo.arg("-p").arg(krate);
+            }
+
+            let description =
+                format!("library{} in doc.rmeta format", crate_description(&*self.crates));
+            let _guard = builder.msg_doc(compiler, &description, target);
+
+            run_cargo(
+                builder,
+                cargo,
+                vec![],
+                &libstd_stamp(builder, compiler, target),
+                target_deps.clone(),
+                false,
+                true, // ship doc.rmeta files
+            );
+            let libdir = builder.sysroot_libdir(compiler, target);
+            let hostdir = builder.sysroot_libdir(compiler, compiler.host);
+            add_to_sysroot(builder, &libdir, &hostdir, &libstd_stamp(builder, compiler, target));
+        }
+
         // We build a sysroot for mir-opt tests using the same trick that Miri does: A check build
         // with -Zalways-encode-mir. This frees us from the need to have a target linker, and the
         // fact that this is a check build integrates nicely with run_cargo.
@@ -1958,7 +1998,7 @@ pub fn run_cargo(
                 }
             } else {
                 // In all other cases keep all rlibs
-                keep |= filename.ends_with(".rlib");
+                keep |= filename.ends_with(".rlib") || filename.ends_with(".doc.rmeta");
             }
 
             if !keep {

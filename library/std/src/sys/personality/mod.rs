@@ -16,7 +16,7 @@ mod dwarf;
 cfg_if::cfg_if! {
     if #[cfg(target_os = "emscripten")] {
         mod emcc;
-    } else if #[cfg(any(target_env = "msvc", target_family = "wasm"))] {
+    } else if #[cfg(any(doc, target_env = "msvc", target_family = "wasm"))] {
         // This is required by the compiler to exist (e.g., it's a lang item),
         // but it's never actually called by the compiler because
         // __CxxFrameHandler3 (msvc) / __gxx_wasm_personality_v0 (wasm) is the

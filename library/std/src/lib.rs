@@ -374,7 +374,7 @@
 //
 // Library features (unwind):
 // tidy-alphabetical-start
-#![feature(panic_unwind)]
+#![cfg_attr(not(doc), feature(panic_unwind))]
 // tidy-alphabetical-end
 //
 // Library features (std_detect):
@@ -438,7 +438,7 @@ extern crate alloc as alloc_crate;
 extern crate libc;
 
 // We always need an unwinder currently for backtraces
-#[doc(masked)]
+#[cfg(not(doc))]
 #[allow(unused_extern_crates)]
 extern crate unwind;
 
