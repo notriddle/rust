@@ -3,8 +3,10 @@ use std::collections::BTreeMap;
 
 use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
 use rustc_middle::ty::TyCtxt;
+use rustc_span::def_id::DefId;
 use rustc_span::symbol::Symbol;
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
+use thin_vec::ThinVec;
 
 use crate::clean;
 use crate::clean::types::{Function, Generics, ItemId, Type, WherePredicate};
@@ -39,7 +41,13 @@ pub(crate) fn build_index<'tcx>(
                 parent: Some(parent),
                 parent_idx: None,
                 impl_id,
-                search_type: get_function_type_for_search(item, tcx, impl_generics.as_ref(), cache),
+                search_type: get_function_type_for_search(
+                    item,
+                    tcx,
+                    impl_generics.as_ref(),
+                    Some(parent),
+                    cache,
+                ),
                 aliases: item.attrs.get_doc_aliases(),
                 deprecation: item.deprecation(tcx),
             });
@@ -503,12 +511,42 @@ pub(crate) fn get_function_type_for_search<'tcx>(
     item: &clean::Item,
     tcx: TyCtxt<'tcx>,
     impl_generics: Option<&(clean::Type, clean::Generics)>,
+    parent: Option<DefId>,
     cache: &Cache,
 ) -> Option<IndexItemFunctionType> {
+    let mut trait_info = None;
+    let impl_or_trait_generics = impl_generics.or_else(|| {
+        if let Some(def_id) = parent &&
+            let Some(trait_) = cache.traits.get(&def_id) &&
+            let Some((path, _)) = cache.paths.get(&def_id)
+                .or_else(|| cache.external_paths.get(&def_id) )
+        {
+            let path = clean::Path {
+                res: rustc_hir::def::Res::Def(rustc_hir::def::DefKind::Trait, def_id),
+                segments: path.iter().map(|name| clean::PathSegment {
+                    name: *name,
+                    args: clean::GenericArgs::AngleBracketed {
+                        args: Vec::new().into_boxed_slice(),
+                        bindings: ThinVec::new(),
+                    },
+                }).collect(),
+            };
+            trait_info = Some((clean::Type::Path { path }, trait_.generics.clone()));
+            Some(trait_info.as_ref().unwrap())
+        } else {
+            None
+        }
+    });
     let (mut inputs, mut output, where_clause) = match *item.kind {
-        clean::FunctionItem(ref f) => get_fn_inputs_and_outputs(f, tcx, impl_generics, cache),
-        clean::MethodItem(ref m, _) => get_fn_inputs_and_outputs(m, tcx, impl_generics, cache),
-        clean::TyMethodItem(ref m) => get_fn_inputs_and_outputs(m, tcx, impl_generics, cache),
+        clean::FunctionItem(ref f) => {
+            get_fn_inputs_and_outputs(f, tcx, impl_or_trait_generics, cache)
+        }
+        clean::MethodItem(ref m, _) => {
+            get_fn_inputs_and_outputs(m, tcx, impl_or_trait_generics, cache)
+        }
+        clean::TyMethodItem(ref m) => {
+            get_fn_inputs_and_outputs(m, tcx, impl_or_trait_generics, cache)
+        }
         _ => return None,
     };
 
@@ -518,15 +556,23 @@ pub(crate) fn get_function_type_for_search<'tcx>(
     Some(IndexItemFunctionType { inputs, output, where_clause })
 }
 
-fn get_index_type(clean_type: &clean::Type, generics: Vec<RenderType>) -> RenderType {
+fn get_index_type(
+    clean_type: &clean::Type,
+    generics: Vec<RenderType>,
+    rgen: &mut FxHashMap<SimplifiedParam, (isize, Vec<RenderType>)>,
+) -> RenderType {
     RenderType {
-        id: get_index_type_id(clean_type),
+        id: get_index_type_id(clean_type, rgen),
         generics: if generics.is_empty() { None } else { Some(generics) },
         bindings: None,
     }
 }
 
-fn get_index_type_id(clean_type: &clean::Type) -> Option<RenderTypeId> {
+fn get_index_type_id(
+    clean_type: &clean::Type,
+    rgen: &mut FxHashMap<SimplifiedParam, (isize, Vec<RenderType>)>,
+) -> Option<RenderTypeId> {
+    use rustc_hir::def::{DefKind, Res};
     match *clean_type {
         clean::Type::Path { ref path, .. } => Some(RenderTypeId::DefId(path.def_id())),
         clean::DynTrait(ref bounds, _) => {
@@ -534,17 +580,30 @@ fn get_index_type_id(clean_type: &clean::Type) -> Option<RenderTypeId> {
         }
         clean::Primitive(p) => Some(RenderTypeId::Primitive(p)),
         clean::BorrowedRef { ref type_, .. } | clean::RawPointer(_, ref type_) => {
-            get_index_type_id(type_)
+            get_index_type_id(type_, rgen)
         }
         // The type parameters are converted to generics in `simplify_fn_type`
         clean::Slice(_) => Some(RenderTypeId::Primitive(clean::PrimitiveType::Slice)),
         clean::Array(_, _) => Some(RenderTypeId::Primitive(clean::PrimitiveType::Array)),
         clean::Tuple(_) => Some(RenderTypeId::Primitive(clean::PrimitiveType::Tuple)),
+        clean::QPath(ref data) => {
+            if data.self_type.is_self_type()
+                && let Some(clean::Path { res: Res::Def(DefKind::Trait, trait_), .. }) = data.trait_
+            {
+                let idx = -isize::try_from(rgen.len() + 1).unwrap();
+                let (idx, _) = rgen.entry(SimplifiedParam::AssociatedType(trait_, data.assoc.name))
+                    .or_insert_with(|| {
+                        (idx, Vec::new())
+                    });
+                Some(RenderTypeId::Index(*idx))
+            } else {
+                None
+            }
+        }
         // Not supported yet
         clean::BareFunction(_)
         | clean::Generic(_)
         | clean::ImplTrait(_)
-        | clean::QPath { .. }
         | clean::Infer => None,
     }
 }
@@ -555,6 +614,9 @@ enum SimplifiedParam {
     Symbol(Symbol),
     // every argument-position impl trait is its own type parameter
     Anonymous(isize),
+    // in a trait definition, the associated types are all bound to
+    // their own type parameter
+    AssociatedType(DefId, Symbol),
 }
 
 /// The point of this function is to lower generics and types into the simplified form that the
@@ -585,10 +647,17 @@ fn simplify_fn_type<'tcx, 'a>(
     }
 
     // First, check if it's "Self".
+    let mut is_self = false;
     let mut arg = if let Some(self_) = self_ {
         match &*arg {
-            Type::BorrowedRef { type_, .. } if type_.is_self_type() => self_,
-            type_ if type_.is_self_type() => self_,
+            Type::BorrowedRef { type_, .. } if type_.is_self_type() => {
+                is_self = true;
+                self_
+            }
+            type_ if type_.is_self_type() => {
+                is_self = true;
+                self_
+            }
             arg => arg,
         }
     } else {
@@ -705,7 +774,7 @@ fn simplify_fn_type<'tcx, 'a>(
             is_return,
             cache,
         );
-        res.push(get_index_type(arg, ty_generics));
+        res.push(get_index_type(arg, ty_generics, rgen));
     } else if let Type::Array(ref ty, _) = *arg {
         let mut ty_generics = Vec::new();
         simplify_fn_type(
@@ -719,7 +788,7 @@ fn simplify_fn_type<'tcx, 'a>(
             is_return,
             cache,
         );
-        res.push(get_index_type(arg, ty_generics));
+        res.push(get_index_type(arg, ty_generics, rgen));
     } else if let Type::Tuple(ref tys) = *arg {
         let mut ty_generics = Vec::new();
         for ty in tys {
@@ -735,7 +804,7 @@ fn simplify_fn_type<'tcx, 'a>(
                 cache,
             );
         }
-        res.push(get_index_type(arg, ty_generics));
+        res.push(get_index_type(arg, ty_generics, rgen));
     } else {
         // This is not a type parameter. So for example if we have `T, U: Option<T>`, and we're
         // looking at `Option`, we enter this "else" condition, otherwise if it's `T`, we don't.
@@ -772,7 +841,69 @@ fn simplify_fn_type<'tcx, 'a>(
                 );
             }
         }
-        let id = get_index_type_id(&arg);
+        // Every trait associated type on self gets assigned to a type parameter index
+        // this same one is used later for any appearances of these types
+        //
+        // for example, Iterator::next is:
+        //
+        //     trait Iterator {
+        //         fn next(&mut self) -> Option<Self::Item>
+        //     }
+        //
+        // Self is technically just Iterator, but we want to pretend it's more like this:
+        //
+        //     fn next<T>(self: Iterator<Item=T>) -> Option<T>
+        if is_self &&
+            let Type::Path { path } = arg &&
+            let def_id = path.def_id() &&
+            let Some(trait_) = cache.traits.get(&def_id) &&
+            trait_.items.iter().any(|at| at.is_ty_associated_type())
+        {
+            for assoc_ty in &trait_.items {
+                if let clean::ItemKind::TyAssocTypeItem(_generics, bounds) = &*assoc_ty.kind &&
+                    let Some(name) = assoc_ty.name
+                {
+                    let idx = -isize::try_from(rgen.len() + 1).unwrap();
+                    let (idx, stored_bounds) = rgen.entry(SimplifiedParam::AssociatedType(def_id, name))
+                        .or_insert_with(|| {
+                            (idx, Vec::new())
+                        });
+                    let idx = *idx;
+                    if stored_bounds.is_empty() {
+                        // Can't just pass stored_bounds to simplify_fn_type,
+                        // because it also accepts rgen as a parameter.
+                        // Instead, have it fill in this local, then copy it into the map afterward.
+                        let mut type_bounds = Vec::new();
+                        for bound in bounds {
+                            if let Some(path) = bound.get_trait_path() {
+                                let ty = Type::Path { path };
+                                simplify_fn_type(
+                                    self_,
+                                    generics,
+                                    &ty,
+                                    tcx,
+                                    recurse + 1,
+                                    &mut type_bounds,
+                                    rgen,
+                                    is_return,
+                                    cache,
+                                );
+                            }
+                        }
+                        let stored_bounds = &mut rgen.get_mut(&SimplifiedParam::AssociatedType(def_id, name)).unwrap().1;
+                        if stored_bounds.is_empty() {
+                            *stored_bounds = type_bounds;
+                        }
+                    }
+                    ty_bindings.push((RenderTypeId::AssociatedType(name), vec![RenderType {
+                        id: Some(RenderTypeId::Index(idx)),
+                        generics: None,
+                        bindings: None,
+                    }]))
+                }
+            }
+        }
+        let id = get_index_type_id(&arg, rgen);
         if id.is_some() || !ty_generics.is_empty() {
             res.push(RenderType {
                 id,
@@ -872,13 +1003,15 @@ fn simplify_fn_binding<'tcx, 'a>(
 fn get_fn_inputs_and_outputs<'tcx>(
     func: &Function,
     tcx: TyCtxt<'tcx>,
-    impl_generics: Option<&(clean::Type, clean::Generics)>,
+    impl_or_trait_generics: Option<&(clean::Type, clean::Generics)>,
     cache: &Cache,
 ) -> (Vec<RenderType>, Vec<RenderType>, Vec<Vec<RenderType>>) {
     let decl = &func.decl;
 
+    let mut rgen: FxHashMap<SimplifiedParam, (isize, Vec<RenderType>)> = Default::default();
+
     let combined_generics;
-    let (self_, generics) = if let Some((impl_self, impl_generics)) = impl_generics {
+    let (self_, generics) = if let Some((impl_self, impl_generics)) = impl_or_trait_generics {
         match (impl_generics.is_empty(), func.generics.is_empty()) {
             (true, _) => (Some(impl_self), &func.generics),
             (_, true) => (Some(impl_self), impl_generics),
@@ -899,8 +1032,6 @@ fn get_fn_inputs_and_outputs<'tcx>(
     } else {
         (None, &func.generics)
     };
-
-    let mut rgen: FxHashMap<SimplifiedParam, (isize, Vec<RenderType>)> = Default::default();
 
     let mut arg_types = Vec::new();
     for arg in decl.inputs.values.iter() {
