@@ -72,6 +72,7 @@ the standard library and functions that are included in the results list:
 | [`stdout, [u8]`][stdoutu8] | `Stdout::write` |
 | [`any -> !`][] | `panic::panic_any` |
 | [`vec::intoiter<T> -> [T]`][iterasslice] | `IntoIter::as_slice` and `IntoIter::next_chunk` |
+| [`iterator<T>, fnmut -> T`][iterreduce] | `Iterator::reduce` and `Iterator::find` |
 
 [`usize -> vec`]: ../../std/vec/struct.Vec.html?search=usize%20-%3E%20vec&filter-crate=std
 [`vec, vec -> bool`]: ../../std/vec/struct.Vec.html?search=vec,%20vec%20-%3E%20bool&filter-crate=std
@@ -81,6 +82,7 @@ the standard library and functions that are included in the results list:
 [`any -> !`]: ../../std/vec/struct.Vec.html?search=any%20-%3E%20!&filter-crate=std
 [stdoutu8]: ../../std/vec/struct.Vec.html?search=stdout%2C%20[u8]&filter-crate=std
 [iterasslice]: ../../std/vec/struct.Vec.html?search=vec%3A%3Aintoiter<T>%20->%20[T]&filter-crate=std
+[iterreduce]: ../../std/index.html?search=iterator<T>%2C%20fnmut%20->%20T&filter-crate=std
 
 ### How type-based search works
 
@@ -95,7 +97,9 @@ After deciding which items are type parameters and which are actual types, it
 then searches by matching up the function parameters (written before the `->`)
 and the return types (written after the `->`). Type matching is order-agnostic,
 and allows items to be left out of the query, but items that are present in the
-query must be present in the function for it to match.
+query must be present in the function for it to match. The `self` parameter is
+treated the same as any other parameter, and `Self` is resolved to the
+underlying type's name.
 
 Function signature searches can query generics, wrapped in angle brackets, and
 traits will be normalized like types in the search engine if no type parameters
@@ -103,8 +107,13 @@ match them. For example, a function with the signature
 `fn my_function<I: Iterator<Item=u32>>(input: I) -> usize`
 can be matched with the following queries:
 
-* `Iterator<u32> -> usize`
-* `Iterator -> usize`
+* `Iterator<Item=u32> -> usize`
+* `Iterator<u32> -> usize` (you can leave out the `Item=` part)
+* `Iterator -> usize` (you can leave out iterator's generic entirely)
+* `T -> usize` (you can match with a generic parameter)
+
+Each of the above queries is progressively looser, except the last one
+would not match `dyn Iterator`, since that's not a type parameter.
 
 Generics and function parameters are order-agnostic, but sensitive to nesting
 and number of matches. For example, a function with the signature
@@ -183,7 +192,8 @@ slice = OPEN-SQUARE-BRACKET [ nonempty-arg-list ] CLOSE-SQUARE-BRACKET
 arg = [type-filter *WS COLON *WS] (path [generics] / slice / [!])
 type-sep = COMMA/WS *(COMMA/WS)
 nonempty-arg-list = *(type-sep) arg *(type-sep arg) *(type-sep)
-generics = OPEN-ANGLE-BRACKET [ nonempty-arg-list ] *(type-sep)
+generic-arg-list = *(type-sep) arg [ EQUAL arg ] *(type-sep arg [ EQUAL arg ]) *(type-sep)
+generics = OPEN-ANGLE-BRACKET [ generic-arg-list ] *(type-sep)
             CLOSE-ANGLE-BRACKET
 return-args = RETURN-ARROW *(type-sep) nonempty-arg-list
 
@@ -230,6 +240,7 @@ DOUBLE-COLON = "::"
 QUOTE = %x22
 COMMA = ","
 RETURN-ARROW = "->"
+EQUAL = "="
 
 ALPHA = %x41-5A / %x61-7A ; A-Z / a-z
 DIGIT = %x30-39
