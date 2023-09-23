@@ -22,6 +22,7 @@ pub(crate) fn build_index<'tcx>(
 ) -> String {
     let mut itemid_to_pathid = FxHashMap::default();
     let mut primitives = FxHashMap::default();
+    let mut associated_types = FxHashMap::default();
     let mut crate_paths = vec![];
 
     // Attach all orphan items to the type's definition if the type
@@ -76,23 +77,72 @@ pub(crate) fn build_index<'tcx>(
     let mut search_index = std::mem::replace(&mut cache.search_index, Vec::new());
     for item in search_index.iter_mut() {
         fn insert_into_map<F: std::hash::Hash + Eq>(
-            ty: &mut RenderType,
             map: &mut FxHashMap<F, isize>,
             itemid: F,
             lastpathid: &mut isize,
             crate_paths: &mut Vec<(ItemType, Vec<Symbol>)>,
             item_type: ItemType,
             path: &[Symbol],
-        ) {
+        ) -> RenderTypeId {
             match map.entry(itemid) {
-                Entry::Occupied(entry) => ty.id = Some(RenderTypeId::Index(*entry.get())),
+                Entry::Occupied(entry) => RenderTypeId::Index(*entry.get()),
                 Entry::Vacant(entry) => {
                     let pathid = *lastpathid;
                     entry.insert(pathid);
                     *lastpathid += 1;
                     crate_paths.push((item_type, path.to_vec()));
-                    ty.id = Some(RenderTypeId::Index(pathid));
+                    RenderTypeId::Index(pathid)
                 }
+            }
+        }
+
+        fn convert_render_type_id(
+            id: RenderTypeId,
+            cache: &mut Cache,
+            itemid_to_pathid: &mut FxHashMap<ItemId, isize>,
+            primitives: &mut FxHashMap<Symbol, isize>,
+            associated_types: &mut FxHashMap<Symbol, isize>,
+            lastpathid: &mut isize,
+            crate_paths: &mut Vec<(ItemType, Vec<Symbol>)>,
+        ) -> Option<RenderTypeId> {
+            let Cache { ref paths, ref external_paths, .. } = *cache;
+            match id {
+                RenderTypeId::DefId(defid) => {
+                    if let Some(&(ref fqp, item_type)) =
+                        paths.get(&defid).or_else(|| external_paths.get(&defid))
+                    {
+                        Some(insert_into_map(
+                            itemid_to_pathid,
+                            ItemId::DefId(defid),
+                            lastpathid,
+                            crate_paths,
+                            item_type,
+                            fqp,
+                        ))
+                    } else {
+                        None
+                    }
+                }
+                RenderTypeId::Primitive(primitive) => {
+                    let sym = primitive.as_sym();
+                    Some(insert_into_map(
+                        primitives,
+                        sym,
+                        lastpathid,
+                        crate_paths,
+                        ItemType::Primitive,
+                        &[sym],
+                    ))
+                }
+                RenderTypeId::Index(_) => Some(id),
+                RenderTypeId::AssociatedType(sym) => Some(insert_into_map(
+                    associated_types,
+                    sym,
+                    lastpathid,
+                    crate_paths,
+                    ItemType::AssocType,
+                    &[sym],
+                )),
             }
         }
 
@@ -101,6 +151,7 @@ pub(crate) fn build_index<'tcx>(
             cache: &mut Cache,
             itemid_to_pathid: &mut FxHashMap<ItemId, isize>,
             primitives: &mut FxHashMap<Symbol, isize>,
+            associated_types: &mut FxHashMap<Symbol, isize>,
             lastpathid: &mut isize,
             crate_paths: &mut Vec<(ItemType, Vec<Symbol>)>,
         ) {
@@ -111,48 +162,55 @@ pub(crate) fn build_index<'tcx>(
                         cache,
                         itemid_to_pathid,
                         primitives,
+                        associated_types,
                         lastpathid,
                         crate_paths,
                     );
                 }
             }
-            let Cache { ref paths, ref external_paths, .. } = *cache;
+            if let Some(bindings) = &mut ty.bindings {
+                bindings.retain_mut(|(associated_type, constraints)| {
+                    let converted_associated_type = convert_render_type_id(
+                        *associated_type,
+                        cache,
+                        itemid_to_pathid,
+                        primitives,
+                        associated_types,
+                        lastpathid,
+                        crate_paths,
+                    );
+                    if let Some(converted_associated_type) = converted_associated_type {
+                        *associated_type = converted_associated_type;
+                    } else {
+                        return false;
+                    }
+                    for constraint in constraints {
+                        convert_render_type(
+                            constraint,
+                            cache,
+                            itemid_to_pathid,
+                            primitives,
+                            associated_types,
+                            lastpathid,
+                            crate_paths,
+                        );
+                    }
+                    true
+                });
+            }
             let Some(id) = ty.id.clone() else {
                 assert!(ty.generics.is_some());
                 return;
             };
-            match id {
-                RenderTypeId::DefId(defid) => {
-                    if let Some(&(ref fqp, item_type)) =
-                        paths.get(&defid).or_else(|| external_paths.get(&defid))
-                    {
-                        insert_into_map(
-                            ty,
-                            itemid_to_pathid,
-                            ItemId::DefId(defid),
-                            lastpathid,
-                            crate_paths,
-                            item_type,
-                            fqp,
-                        );
-                    } else {
-                        ty.id = None;
-                    }
-                }
-                RenderTypeId::Primitive(primitive) => {
-                    let sym = primitive.as_sym();
-                    insert_into_map(
-                        ty,
-                        primitives,
-                        sym,
-                        lastpathid,
-                        crate_paths,
-                        ItemType::Primitive,
-                        &[sym],
-                    );
-                }
-                RenderTypeId::Index(_) => {}
-            }
+            ty.id = convert_render_type_id(
+                id,
+                cache,
+                itemid_to_pathid,
+                primitives,
+                associated_types,
+                lastpathid,
+                crate_paths,
+            );
         }
         if let Some(search_type) = &mut item.search_type {
             for item in &mut search_type.inputs {
@@ -161,6 +219,7 @@ pub(crate) fn build_index<'tcx>(
                     cache,
                     &mut itemid_to_pathid,
                     &mut primitives,
+                    &mut associated_types,
                     &mut lastpathid,
                     &mut crate_paths,
                 );
@@ -171,6 +230,7 @@ pub(crate) fn build_index<'tcx>(
                     cache,
                     &mut itemid_to_pathid,
                     &mut primitives,
+                    &mut associated_types,
                     &mut lastpathid,
                     &mut crate_paths,
                 );
@@ -182,6 +242,7 @@ pub(crate) fn build_index<'tcx>(
                         cache,
                         &mut itemid_to_pathid,
                         &mut primitives,
+                        &mut associated_types,
                         &mut lastpathid,
                         &mut crate_paths,
                     );
@@ -461,6 +522,7 @@ fn get_index_type(clean_type: &clean::Type, generics: Vec<RenderType>) -> Render
     RenderType {
         id: get_index_type_id(clean_type),
         generics: if generics.is_empty() { None } else { Some(generics) },
+        bindings: None,
     }
 }
 
@@ -585,11 +647,19 @@ fn simplify_fn_type<'tcx, 'a>(
             }
         }
         if let Some((idx, _)) = rgen.get(&SimplifiedParam::Symbol(arg_s)) {
-            res.push(RenderType { id: Some(RenderTypeId::Index(*idx)), generics: None });
+            res.push(RenderType {
+                id: Some(RenderTypeId::Index(*idx)),
+                generics: None,
+                bindings: None,
+            });
         } else {
             let idx = -isize::try_from(rgen.len() + 1).unwrap();
             rgen.insert(SimplifiedParam::Symbol(arg_s), (idx, type_bounds));
-            res.push(RenderType { id: Some(RenderTypeId::Index(idx)), generics: None });
+            res.push(RenderType {
+                id: Some(RenderTypeId::Index(idx)),
+                generics: None,
+                bindings: None,
+            });
         }
     } else if let Type::ImplTrait(ref bounds) = *arg {
         let mut type_bounds = Vec::new();
@@ -611,12 +681,16 @@ fn simplify_fn_type<'tcx, 'a>(
         }
         if is_return && !type_bounds.is_empty() {
             // In parameter position, `impl Trait` is a unique thing.
-            res.push(RenderType { id: None, generics: Some(type_bounds) });
+            res.push(RenderType { id: None, generics: Some(type_bounds), bindings: None });
         } else {
             // In parameter position, `impl Trait` is the same as an unnamed generic parameter.
             let idx = -isize::try_from(rgen.len() + 1).unwrap();
             rgen.insert(SimplifiedParam::Anonymous(idx), (idx, type_bounds));
-            res.push(RenderType { id: Some(RenderTypeId::Index(idx)), generics: None });
+            res.push(RenderType {
+                id: Some(RenderTypeId::Index(idx)),
+                generics: None,
+                bindings: None,
+            });
         }
     } else if let Type::Slice(ref ty) = *arg {
         let mut ty_generics = Vec::new();
@@ -669,6 +743,20 @@ fn simplify_fn_type<'tcx, 'a>(
         // So in here, we can add it directly and look for its own type parameters (so for `Option`,
         // we will look for them but not for `T`).
         let mut ty_generics = Vec::new();
+        let mut ty_bindings = Vec::new();
+        for binding in arg.bindings().unwrap_or_default() {
+            simplify_fn_binding(
+                self_,
+                generics,
+                binding,
+                tcx,
+                recurse + 1,
+                &mut ty_bindings,
+                rgen,
+                is_return,
+                cache,
+            );
+        }
         if let Some(arg_generics) = arg.generics() {
             for gen in arg_generics.iter() {
                 simplify_fn_type(
@@ -688,10 +776,93 @@ fn simplify_fn_type<'tcx, 'a>(
         if id.is_some() || !ty_generics.is_empty() {
             res.push(RenderType {
                 id,
+                bindings: if ty_bindings.is_empty() { None } else { Some(ty_bindings) },
                 generics: if ty_generics.is_empty() { None } else { Some(ty_generics) },
             });
         }
     }
+}
+
+fn simplify_fn_binding<'tcx, 'a>(
+    self_: Option<&'a Type>,
+    generics: &Generics,
+    binding: &'a clean::TypeBinding,
+    tcx: TyCtxt<'tcx>,
+    recurse: usize,
+    res: &mut Vec<(RenderTypeId, Vec<RenderType>)>,
+    rgen: &mut FxHashMap<SimplifiedParam, (isize, Vec<RenderType>)>,
+    is_return: bool,
+    cache: &Cache,
+) {
+    let mut ty_binding_constraints = Vec::new();
+    let ty_binding_assoc = RenderTypeId::AssociatedType(binding.assoc.name);
+    for gen in &binding.assoc.args {
+        match gen {
+            clean::GenericArg::Type(arg) => simplify_fn_type(
+                self_,
+                generics,
+                &arg,
+                tcx,
+                recurse + 1,
+                &mut ty_binding_constraints,
+                rgen,
+                is_return,
+                cache,
+            ),
+            clean::GenericArg::Lifetime(_)
+            | clean::GenericArg::Const(_)
+            | clean::GenericArg::Infer => {}
+        }
+    }
+    for binding in binding.assoc.args.bindings() {
+        simplify_fn_binding(
+            self_,
+            generics,
+            &binding,
+            tcx,
+            recurse + 1,
+            res,
+            rgen,
+            is_return,
+            cache,
+        );
+    }
+    match &binding.kind {
+        clean::TypeBindingKind::Equality { term } => {
+            if let clean::Term::Type(arg) = &term {
+                simplify_fn_type(
+                    self_,
+                    generics,
+                    arg,
+                    tcx,
+                    recurse + 1,
+                    &mut ty_binding_constraints,
+                    rgen,
+                    is_return,
+                    cache,
+                );
+            }
+        }
+        clean::TypeBindingKind::Constraint { bounds } => {
+            for bound in &bounds[..] {
+                if let Some(path) = bound.get_trait_path() {
+                    let ty = Type::Path { path };
+                    simplify_fn_type(
+                        self_,
+                        generics,
+                        &ty,
+                        tcx,
+                        recurse + 1,
+                        &mut ty_binding_constraints,
+                        rgen,
+                        is_return,
+                        cache,
+                    );
+                }
+            }
+        }
+    }
+    res.push((ty_binding_assoc, ty_binding_constraints));
 }
 
 /// Return the full list of types when bounds have been resolved.

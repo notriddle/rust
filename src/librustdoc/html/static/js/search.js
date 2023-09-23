@@ -23,27 +23,27 @@ const itemTypes = [
     "import",
     "struct",
     "enum",
-    "fn",
+    "fn", // 5
     "type",
     "static",
     "trait",
     "impl",
-    "tymethod",
+    "tymethod", // 10
     "method",
     "structfield",
     "variant",
     "macro",
-    "primitive",
+    "primitive", // 15
     "associatedtype",
     "constant",
     "associatedconstant",
     "union",
-    "foreigntype",
+    "foreigntype", // 20
     "keyword",
     "existential",
     "attr",
     "derive",
-    "traitalias",
+    "traitalias", // 25
     "generic",
 ];
 
@@ -298,7 +298,7 @@ function initSearch(rawSearchIndex) {
     }
 
     function isEndCharacter(c) {
-        return ",>-]".indexOf(c) !== -1;
+        return "=,>-]".indexOf(c) !== -1;
     }
 
     function isStopCharacter(c) {
@@ -398,7 +398,7 @@ function initSearch(rawSearchIndex) {
      * @return {boolean}
      */
     function isSeparatorCharacter(c) {
-        return c === ",";
+        return c === "," || c === "=";
     }
 
 /**
@@ -500,6 +500,8 @@ function initSearch(rawSearchIndex) {
                     " does not accept generic parameters",
                 ];
             }
+            const bindingName = parserState.isInBinding;
+            parserState.isInBinding = null;
             return {
                 name: "never",
                 id: null,
@@ -507,7 +509,9 @@ function initSearch(rawSearchIndex) {
                 pathWithoutLast: [],
                 pathLast: "never",
                 generics: [],
+                bindings: new Map(),
                 typeFilter: "primitive",
+                bindingName,
             };
         }
         if (path.startsWith("::")) {
@@ -542,14 +546,27 @@ function initSearch(rawSearchIndex) {
         if (isInGenerics) {
             parserState.genericsElems += 1;
         }
+        const bindingName = parserState.isInBinding;
+        parserState.isInBinding = null;
+        const bindings = new Map();
         return {
             name: name.trim(),
             id: null,
             fullPath: pathSegments,
             pathWithoutLast: pathSegments.slice(0, pathSegments.length - 1),
             pathLast: pathSegments[pathSegments.length - 1],
-            generics: generics,
+            generics: generics.filter(gen => {
+                // Syntactically, bindings are parsed as generics,
+                // but the query engine treats them differently.
+                if (gen.bindingName !== null) {
+                    bindings.set(gen.bindingName.name, [gen, ...gen.bindingName.generics]);
+                    return false;
+                }
+                return true;
+            }),
+            bindings,
             typeFilter,
+            bindingName,
         };
     }
 
@@ -608,6 +625,7 @@ function initSearch(rawSearchIndex) {
                     }
                 } else if (
                     c === "[" ||
+                    c === "=" ||
                     isStopCharacter(c) ||
                     isSpecialStartCharacter(c) ||
                     isSeparatorCharacter(c)
@@ -657,6 +675,7 @@ function initSearch(rawSearchIndex) {
             parserState.pos += 1;
             getItemsBefore(query, parserState, generics, "]");
             const typeFilter = parserState.typeFilter;
+            const isInBinding = parserState.isInBinding;
             if (typeFilter !== null && typeFilter !== "primitive") {
                 throw [
                     "Invalid search type: primitive ",
@@ -667,9 +686,15 @@ function initSearch(rawSearchIndex) {
                 ];
             }
             parserState.typeFilter = null;
+            parserState.isInBinding = null;
             parserState.totalElems += 1;
             if (isInGenerics) {
                 parserState.genericsElems += 1;
+            }
+            for (const gen of generics) {
+                if (gen.bindingName !== null) {
+                    throw ["Type parameter ", "=", " cannot be within slice ", "[]"];
+                }
             }
             elems.push({
                 name: "[]",
@@ -679,6 +704,8 @@ function initSearch(rawSearchIndex) {
                 pathLast: "[]",
                 generics,
                 typeFilter: "primitive",
+                bindingName: isInBinding,
+                bindings: new Map(),
             });
         } else {
             const isStringElem = parserState.userQuery[start] === "\"";
@@ -705,15 +732,38 @@ function initSearch(rawSearchIndex) {
             if (start >= end && generics.length === 0) {
                 return;
             }
-            elems.push(
-                createQueryElement(
-                    query,
-                    parserState,
-                    parserState.userQuery.slice(start, end),
-                    generics,
-                    isInGenerics
-                )
-            );
+            if (parserState.userQuery[parserState.pos] === "=") {
+                if (parserState.isInBinding) {
+                    throw ["Cannot write ", "=", " twice in a binding"];
+                }
+                if (!isInGenerics) {
+                    throw ["Type parameter ", "=", " must be within generics list"];
+                }
+                const name = parserState.userQuery.slice(start, end).trim();
+                if (name === "!") {
+                    throw ["Type parameter ", "=", " key cannot be ", "!", " never type"];
+                }
+                if (name.includes("!")) {
+                    throw ["Type parameter ", "=", " key cannot be ", "!", " macro"];
+                }
+                if (name.includes("::")) {
+                    throw ["Type parameter ", "=", " key cannot contain ", "::", " path"];
+                }
+                if (name.includes(":")) {
+                    throw ["Type parameter ", "=", " key cannot contain ", ":", " type"];
+                }
+                parserState.isInBinding = { name, generics };
+            } else {
+                elems.push(
+                    createQueryElement(
+                        query,
+                        parserState,
+                        parserState.userQuery.slice(start, end),
+                        generics,
+                        isInGenerics
+                    )
+                );
+            }
         }
     }
 
@@ -737,6 +787,8 @@ function initSearch(rawSearchIndex) {
         // If this is a generic, keep the outer item's type filter around.
         const oldTypeFilter = parserState.typeFilter;
         parserState.typeFilter = null;
+        const oldIsInBinding = parserState.isInBinding;
+        parserState.isInBinding = null;
 
         let extra = "";
         if (endChar === ">") {
@@ -752,6 +804,9 @@ function initSearch(rawSearchIndex) {
         while (parserState.pos < parserState.length) {
             const c = parserState.userQuery[parserState.pos];
             if (c === endChar) {
+                if (parserState.isInBinding) {
+                    throw ["Unexpected ", endChar, " after ", "="];
+                }
                 break;
             } else if (isSeparatorCharacter(c)) {
                 parserState.pos += 1;
@@ -791,7 +846,9 @@ function initSearch(rawSearchIndex) {
                     throw [
                         "Expected ",
                         ",",
-                        " or ",
+                        ", ",
+                        "=",
+                        ", or ",
                         endChar,
                         ...extra,
                         ", found ",
@@ -801,6 +858,8 @@ function initSearch(rawSearchIndex) {
                 throw [
                     "Expected ",
                     ",",
+                    " or ",
+                    "=",
                     ...extra,
                     ", found ",
                     c,
@@ -828,6 +887,7 @@ function initSearch(rawSearchIndex) {
         parserState.pos += 1;
 
         parserState.typeFilter = oldTypeFilter;
+        parserState.isInBinding = oldIsInBinding;
     }
 
     /**
@@ -1054,6 +1114,11 @@ function initSearch(rawSearchIndex) {
             for (const elem2 of elem.generics) {
                 convertTypeFilterOnElem(elem2);
             }
+            for (const constraints of elem.bindings.values()) {
+                for (const constraint of constraints) {
+                    convertTypeFilterOnElem(constraint);
+                }
+            }
         }
         userQuery = userQuery.trim();
         const parserState = {
@@ -1063,6 +1128,7 @@ function initSearch(rawSearchIndex) {
             totalElems: 0,
             genericsElems: 0,
             typeFilter: null,
+            isInBinding: null,
             userQuery: userQuery.toLowerCase(),
         };
         let query = newParsedQuery(userQuery);
@@ -1395,7 +1461,15 @@ function initSearch(rawSearchIndex) {
                         const generics = fnType.id < 0 ?
                             whereClause[(-fnType.id) - 1] :
                             fnType.generics;
-                        fnTypes = fnTypesScratch.toSpliced(fnTypesOffset, 1, ...generics);
+                        const bindings = fnType.bindings ?
+                            Array.from(fnType.bindings.values()).flat() :
+                            [];
+                        fnTypes = fnTypesScratch.toSpliced(
+                            fnTypesOffset,
+                            1,
+                            ...generics,
+                            ...bindings
+                        );
                         fl = fnTypes.length;
                         // re-run the matching algorithm on this item
                         i = queryElemsOffset - 1;
@@ -1432,25 +1506,33 @@ function initSearch(rawSearchIndex) {
                 for (j = i; j !== fl; ++j) {
                     const fnType = fnTypes[j];
                     if (unifyFunctionTypeIsMatchCandidate(fnType, queryElem, whereClause, mgens)) {
-                        if (!fnTypesScratch) {
-                            fnTypesScratch = fnTypes.slice();
-                        }
-                        unifyFunctionTypes(
-                            fnType.generics,
-                            queryElem.generics,
+                        const simplifiedGenerics = unifyFunctionTypeCheckBindings(
+                            fnType,
+                            queryElem,
                             whereClause,
-                            mgens,
-                            mgensScratch => {
-                                matchCandidates.push({
-                                    fnTypesScratch,
-                                    mgensScratch,
-                                    queryElemsOffset: i,
-                                    fnTypesOffset: j,
-                                    unbox: false,
-                                });
-                                return false; // "reject" all candidates to gather all of them
-                            }
+                            mgens
                         );
+                        if (simplifiedGenerics) {
+                            if (!fnTypesScratch) {
+                                fnTypesScratch = fnTypes.slice();
+                            }
+                            unifyFunctionTypes(
+                                simplifiedGenerics,
+                                queryElem.generics,
+                                whereClause,
+                                mgens,
+                                mgensScratch => {
+                                    matchCandidates.push({
+                                        fnTypesScratch,
+                                        mgensScratch,
+                                        queryElemsOffset: i,
+                                        fnTypesOffset: j,
+                                        unbox: false,
+                                    });
+                                    return false; // "reject" all candidates to gather all of them
+                                }
+                            );
+                        }
                     }
                     if (unifyFunctionTypeIsUnboxCandidate(fnType, queryElem, whereClause, mgens)) {
                         if (!fnTypesScratch) {
@@ -1503,21 +1585,36 @@ function initSearch(rawSearchIndex) {
             }
             return true;
         }
-        function unifyFunctionTypeIsMatchCandidate(fnType, queryElem, whereClause, mgens) {
+        /**
+         * Check if this function is a match candidate.
+         *
+         * This function is all the fast checks that don't require backtracking.
+         * It checks that two items are not named differently, and is load-bearing for that.
+         * It also checks that, if the query has generics, the function type must have generics
+         * or associated type bindings: that's not load-bearing, but it prevents unnecessary
+         * backtracking later.
+         *
+         * @param {FunctionType} fnType
+         * @param {QueryElement} queryElem
+         * @param {[FunctionType]} whereClause - Trait bounds for generic items.
+         * @param {Map<number,number>|null} mgensIn - Map functions generics to query generics.
+         * @returns {boolean}
+         */
+        function unifyFunctionTypeIsMatchCandidate(fnType, queryElem, whereClause, mgensIn) {
             // type filters look like `trait:Read` or `enum:Result`
             if (!typePassesFilter(queryElem.typeFilter, fnType.ty)) {
                 return false;
             }
             // fnType.id < 0 means generic
             // queryElem.id < 0 does too
-            // mgens[fnType.id] = queryElem.id
-            // or, if mgens[fnType.id] = 0, then we've matched this generic with a bare trait
+            // mgensIn[fnType.id] = queryElem.id
+            // or, if mgensIn[fnType.id] = 0, then we've matched this generic with a bare trait
             // and should make that same decision everywhere it appears
             if (fnType.id < 0 && queryElem.id < 0) {
-                if (mgens.has(fnType.id) && mgens.get(fnType.id) !== queryElem.id) {
+                if (mgensIn.has(fnType.id) && mgensIn.get(fnType.id) !== queryElem.id) {
                     return false;
                 }
-                for (const [fid, qid] of mgens.entries()) {
+                for (const [fid, qid] of mgensIn.entries()) {
                     if (fnType.id !== fid && queryElem.id === qid) {
                         return false;
                     }
@@ -1525,6 +1622,7 @@ function initSearch(rawSearchIndex) {
                         return false;
                     }
                 }
+                return true;
             } else {
                 if (queryElem.id === typeNameIdOfArrayOrSlice &&
                     (fnType.id === typeNameIdOfSlice || fnType.id === typeNameIdOfArray)
@@ -1536,7 +1634,12 @@ function initSearch(rawSearchIndex) {
                 }
                 // If the query elem has generics, and the function doesn't,
                 // it can't match.
-                if (fnType.generics.length === 0 && queryElem.generics.length !== 0) {
+                if ((fnType.generics.length + fnType.bindings.size) === 0 &&
+                    queryElem.generics.length !== 0
+                ) {
+                    return false;
+                }
+                if (fnType.bindings.size < queryElem.bindings.size) {
                     return false;
                 }
                 // If the query element is a path (it contains `::`), we need to check if this
@@ -1565,9 +1668,75 @@ function initSearch(rawSearchIndex) {
                         return false;
                     }
                 }
+                return true;
             }
-            return true;
         }
+        /**
+         * This function checks the associated type bindings. Any that aren't matched get converted
+         * to generics, and this function returns an array of the function's generics with these
+         * simplified bindings added to them. That is, it takes a path like this:
+         *
+         *     Iterator<Item=u32>
+         *
+         * ... if queryElem itself has an `Item=` in it, then this function returns an empty array.
+         * But if queryElem contains no Item=, then this function returns a one-item array with the
+         * ID of u32 in it, and the rest of the matching engine acts as if `Iterator<u32>` were
+         * the type instead.
+         *
+         * @param {FunctionType} fnType
+         * @param {QueryElement} queryElem
+         * @param {[FunctionType]} whereClause - Trait bounds for generic items.
+         * @param {Map<number,number>|null} mgensIn - Map functions generics to query generics.
+         * @returns {boolean|FunctionType[]}
+         */
+        function unifyFunctionTypeCheckBindings(fnType, queryElem, whereClause, mgensIn) {
+            // Simplify generics now
+            let simplifiedGenerics = fnType.generics;
+            if (!simplifiedGenerics) {
+                simplifiedGenerics = [];
+            }
+            if (fnType.bindings.size < queryElem.bindings.size) {
+                return false;
+            }
+            if (fnType.bindings.size > 0) {
+                for (const [name, constraints] of queryElem.bindings.entries()) {
+                    if (!fnType.bindings.has(name)) {
+                        return false;
+                    }
+                    // Since both items must have exactly one entry per name,
+                    // we don't need to backtrack here.
+                    if (!unifyFunctionTypes(
+                        fnType.bindings.get(name),
+                        constraints,
+                        whereClause,
+                        mgensIn
+                    )) {
+                        return false;
+                    }
+                }
+                const binds = Array.from(fnType.bindings.entries()).flatMap(entry => {
+                    const [name, constraints] = entry;
+                    if (queryElem.bindings.has(name)) {
+                        return [];
+                    } else {
+                        return constraints;
+                    }
+                });
+                if (simplifiedGenerics.length > 0) {
+                    simplifiedGenerics = [...simplifiedGenerics, ...binds];
+                } else {
+                    simplifiedGenerics = binds;
+                }
+            }
+            return simplifiedGenerics;
+        }
+        /**
+         * @param {FunctionType} fnType
+         * @param {QueryElement} queryElem
+         * @param {[FunctionType]} whereClause - Trait bounds for generic items.
+         * @param {Map<number,number>|null} mgens - Map functions generics to query generics.
+         * @returns {boolean}
+         */
         function unifyFunctionTypeIsUnboxCandidate(fnType, queryElem, whereClause, mgens) {
             if (fnType.id < 0 && queryElem.id >= 0) {
                 if (!whereClause) {
@@ -1583,8 +1752,12 @@ function initSearch(rawSearchIndex) {
                 // `fn read_all<R: Read>(R) -> Result<usize>`
                 // generic `R` is considered "unboxed"
                 return checkIfInList(whereClause[(-fnType.id) - 1], queryElem, whereClause);
-            } else if (fnType.generics && fnType.generics.length > 0) {
-                return checkIfInList(fnType.generics, queryElem, whereClause);
+            } else if (fnType.generics.length > 0 || fnType.bindings.length > 0) {
+                const simplifiedGenerics = [
+                    ...fnType.generics,
+                    ...Array.from(fnType.bindings.values()).flat(),
+                ];
+                return checkIfInList(simplifiedGenerics, queryElem, whereClause);
             }
             return false;
         }
@@ -1619,15 +1792,17 @@ function initSearch(rawSearchIndex) {
           * @return {boolean} - Returns true if the type matches, false otherwise.
           */
         function checkType(row, elem, whereClause) {
-            if (elem.id < 0) {
-                return row.id < 0 || checkIfInList(row.generics, elem, whereClause);
-            }
-            if (row.id > 0 && elem.id > 0 && elem.pathWithoutLast.length === 0 &&
-                typePassesFilter(elem.typeFilter, row.ty) && elem.generics.length === 0 &&
-                // special case
-                elem.id !== typeNameIdOfArrayOrSlice
-            ) {
-                return row.id === elem.id || checkIfInList(row.generics, elem, whereClause);
+            if (row.bindings.size === 0 && elem.bindings.size === 0) {
+                if (elem.id < 0) {
+                    return row.id < 0 || checkIfInList(row.generics, elem, whereClause);
+                }
+                if (row.id > 0 && elem.id > 0 && elem.pathWithoutLast.length === 0 &&
+                    typePassesFilter(elem.typeFilter, row.ty) && elem.generics.length === 0 &&
+                    // special case
+                    elem.id !== typeNameIdOfArrayOrSlice
+                ) {
+                    return row.id === elem.id || checkIfInList(row.generics, elem, whereClause);
+                }
             }
             return unifyFunctionTypes([row], [elem], whereClause);
         }
@@ -1974,7 +2149,7 @@ function initSearch(rawSearchIndex) {
                     elem.id = match;
                 }
                 if ((elem.id === null && parsedQuery.totalElems > 1 && elem.typeFilter === -1
-                     && elem.generics.length === 0)
+                     && elem.generics.length === 0 && elem.bindings.size === 0)
                     || elem.typeFilter === TY_GENERIC) {
                     if (genericSymbols.has(elem.name)) {
                         elem.id = genericSymbols.get(elem.name);
@@ -2017,6 +2192,23 @@ function initSearch(rawSearchIndex) {
                 for (const elem2 of elem.generics) {
                     convertNameToId(elem2);
                 }
+                elem.bindings = new Map(Array.from(elem.bindings.entries())
+                    .map(entry => {
+                        const [name, constraints] = entry;
+                        if (!typeNameIdMap.has(name)) {
+                            parsedQuery.error = [
+                                "Type parameter ",
+                                name,
+                                " does not exist",
+                            ];
+                        }
+                        for (const elem2 of constraints) {
+                            convertNameToId(elem2);
+                        }
+
+                        return [typeNameIdMap.get(name), constraints];
+                    })
+                );
             }
 
             for (const elem of parsedQuery.elems) {
@@ -2533,16 +2725,39 @@ ${item.displayPath}<span class="${type}">${name}</span>\
     function buildItemSearchType(type, lowercasePaths) {
         const PATH_INDEX_DATA = 0;
         const GENERICS_DATA = 1;
-        let pathIndex, generics;
+        const BINDINGS_DATA = 2;
+        let pathIndex, generics, bindings;
         if (typeof type === "number") {
             pathIndex = type;
             generics = [];
+            bindings = new Map();
         } else {
             pathIndex = type[PATH_INDEX_DATA];
             generics = buildItemSearchTypeAll(
                 type[GENERICS_DATA],
                 lowercasePaths
             );
+            if (type.length > BINDINGS_DATA) {
+                bindings = new Map(type[BINDINGS_DATA].map(binding => {
+                    const [assocType, constraints] = binding;
+                    // Associated type constructors are represented sloppily in rustdoc's
+                    // type search, to make the engine simpler.
+                    //
+                    // MyType<Output<T>=Result<T>> is equivalent to MyType<Output<Result<T>>=T>
+                    // and both are, essentially
+                    // MyType<Output=(T, Result<T>)>, except the tuple isn't actually there.
+                    // It's more like the value of a type binding is naturally an array,
+                    // which rustdoc calls "constraints".
+                    //
+                    // As a result, the key should never have generics on it.
+                    return [
+                        buildItemSearchType(assocType, lowercasePaths).id,
+                        buildItemSearchTypeAll(constraints, lowercasePaths),
+                    ];
+                }));
+            } else {
+                bindings = new Map();
+            }
         }
         if (pathIndex < 0) {
             // types less than 0 are generic parameters
@@ -2552,6 +2767,7 @@ ${item.displayPath}<span class="${type}">${name}</span>\
                 ty: TY_GENERIC,
                 path: null,
                 generics,
+                bindings,
             };
         }
         if (pathIndex === 0) {
@@ -2561,6 +2777,7 @@ ${item.displayPath}<span class="${type}">${name}</span>\
                 ty: null,
                 path: null,
                 generics,
+                bindings,
             };
         }
         const item = lowercasePaths[pathIndex - 1];
@@ -2569,6 +2786,7 @@ ${item.displayPath}<span class="${type}">${name}</span>\
             ty: item.ty,
             path: item.path,
             generics,
+            bindings,
         };
     }
 
