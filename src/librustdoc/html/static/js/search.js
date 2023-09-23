@@ -1506,11 +1506,12 @@ function initSearch(rawSearchIndex) {
                 for (j = i; j !== fl; ++j) {
                     const fnType = fnTypes[j];
                     if (unifyFunctionTypeIsMatchCandidate(fnType, queryElem, whereClause, mgens)) {
+                        const mgensScratch = new Map(mgens);
                         const simplifiedGenerics = unifyFunctionTypeCheckBindings(
                             fnType,
                             queryElem,
                             whereClause,
-                            mgens
+                            mgensScratch
                         );
                         if (simplifiedGenerics) {
                             if (!fnTypesScratch) {
@@ -1520,7 +1521,7 @@ function initSearch(rawSearchIndex) {
                                 simplifiedGenerics,
                                 queryElem.generics,
                                 whereClause,
-                                mgens,
+                                mgensScratch,
                                 mgensScratch => {
                                     matchCandidates.push({
                                         fnTypesScratch,
@@ -1596,7 +1597,7 @@ function initSearch(rawSearchIndex) {
          *
          * @param {FunctionType} fnType
          * @param {QueryElement} queryElem
-         * @param {[FunctionType]} whereClause - Trait bounds for generic items.
+         * @param {[FunctionSearchType]} whereClause - Trait bounds for generic items.
          * @param {Map<number,number>|null} mgensIn - Map functions generics to query generics.
          * @returns {boolean}
          */
@@ -1686,10 +1687,11 @@ function initSearch(rawSearchIndex) {
          * @param {FunctionType} fnType
          * @param {QueryElement} queryElem
          * @param {[FunctionType]} whereClause - Trait bounds for generic items.
-         * @param {Map<number,number>|null} mgensIn - Map functions generics to query generics.
+         * @param {Map<number,number>|null} mgensInout - Map functions generics to query generics.
+         *                                               Written on success.
          * @returns {boolean|FunctionType[]}
          */
-        function unifyFunctionTypeCheckBindings(fnType, queryElem, whereClause, mgensIn) {
+        function unifyFunctionTypeCheckBindings(fnType, queryElem, whereClause, mgensInout) {
             // Simplify generics now
             let simplifiedGenerics = fnType.generics;
             if (!simplifiedGenerics) {
@@ -1699,17 +1701,24 @@ function initSearch(rawSearchIndex) {
                 return false;
             }
             if (fnType.bindings.size > 0) {
+                const mgensResults = new Map(mgensInout);
                 for (const [name, constraints] of queryElem.bindings.entries()) {
                     if (!fnType.bindings.has(name)) {
                         return false;
                     }
                     // Since both items must have exactly one entry per name,
-                    // we don't need to backtrack here.
+                    // we don't need to backtrack here, but do need to write mgens.
                     if (!unifyFunctionTypes(
                         fnType.bindings.get(name),
                         constraints,
                         whereClause,
-                        mgensIn
+                        mgensResults,
+                        mgens => {
+                            for (const [fid, qid] of mgens.entries()) {
+                                mgensResults.set(fid, qid);
+                            }
+                            return true;
+                        }
                     )) {
                         return false;
                     }
@@ -1726,6 +1735,11 @@ function initSearch(rawSearchIndex) {
                     simplifiedGenerics = [...simplifiedGenerics, ...binds];
                 } else {
                     simplifiedGenerics = binds;
+                }
+                if (mgensInout) {
+                    for (const [fid, qid] of mgensResults.entries()) {
+                        mgensInout.set(fid, qid);
+                    }
                 }
             }
             return simplifiedGenerics;
