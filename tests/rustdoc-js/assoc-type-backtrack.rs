@@ -25,3 +25,14 @@ impl<'a, T, I> MyTrait for Cloned<I> where
         loop {}
     }
 }
+
+pub trait MyFuture {
+    type Output;
+}
+
+pub trait MyIntoFuture {
+    type Output;
+    type Fut: MyFuture<Output=Self::Output>;
+    fn into_future(self) -> Self::Fut;
+    fn into_future_2(self, other: Self) -> Self::Fut;
+}
