@@ -187,11 +187,10 @@ pub(crate) fn build_index<'tcx>(
                         lastpathid,
                         crate_paths,
                     );
-                    if let Some(converted_associated_type) = converted_associated_type {
-                        *associated_type = converted_associated_type;
-                    } else {
+                    let Some(converted_associated_type) = converted_associated_type else {
                         return false;
-                    }
+                    };
+                    *associated_type = converted_associated_type;
                     for constraint in constraints {
                         convert_render_type(
                             constraint,
@@ -516,20 +515,23 @@ pub(crate) fn get_function_type_for_search<'tcx>(
 ) -> Option<IndexItemFunctionType> {
     let mut trait_info = None;
     let impl_or_trait_generics = impl_generics.or_else(|| {
-        if let Some(def_id) = parent &&
-            let Some(trait_) = cache.traits.get(&def_id) &&
-            let Some((path, _)) = cache.paths.get(&def_id)
-                .or_else(|| cache.external_paths.get(&def_id) )
+        if let Some(def_id) = parent
+            && let Some(trait_) = cache.traits.get(&def_id)
+            && let Some((path, _)) =
+                cache.paths.get(&def_id).or_else(|| cache.external_paths.get(&def_id))
         {
             let path = clean::Path {
                 res: rustc_hir::def::Res::Def(rustc_hir::def::DefKind::Trait, def_id),
-                segments: path.iter().map(|name| clean::PathSegment {
-                    name: *name,
-                    args: clean::GenericArgs::AngleBracketed {
-                        args: Vec::new().into_boxed_slice(),
-                        bindings: ThinVec::new(),
-                    },
-                }).collect(),
+                segments: path
+                    .iter()
+                    .map(|name| clean::PathSegment {
+                        name: *name,
+                        args: clean::GenericArgs::AngleBracketed {
+                            args: Vec::new().into_boxed_slice(),
+                            bindings: ThinVec::new(),
+                        },
+                    })
+                    .collect(),
             };
             trait_info = Some((clean::Type::Path { path }, trait_.generics.clone()));
             Some(trait_info.as_ref().unwrap())
@@ -538,14 +540,8 @@ pub(crate) fn get_function_type_for_search<'tcx>(
         }
     });
     let (mut inputs, mut output, where_clause) = match *item.kind {
-        clean::FunctionItem(ref f) => {
+        clean::FunctionItem(ref f) | clean::MethodItem(ref f, _) | clean::TyMethodItem(ref f) => {
             get_fn_inputs_and_outputs(f, tcx, impl_or_trait_generics, cache)
-        }
-        clean::MethodItem(ref m, _) => {
-            get_fn_inputs_and_outputs(m, tcx, impl_or_trait_generics, cache)
-        }
-        clean::TyMethodItem(ref m) => {
-            get_fn_inputs_and_outputs(m, tcx, impl_or_trait_generics, cache)
         }
         _ => return None,
     };
@@ -591,20 +587,16 @@ fn get_index_type_id(
                 && let Some(clean::Path { res: Res::Def(DefKind::Trait, trait_), .. }) = data.trait_
             {
                 let idx = -isize::try_from(rgen.len() + 1).unwrap();
-                let (idx, _) = rgen.entry(SimplifiedParam::AssociatedType(trait_, data.assoc.name))
-                    .or_insert_with(|| {
-                        (idx, Vec::new())
-                    });
+                let (idx, _) = rgen
+                    .entry(SimplifiedParam::AssociatedType(trait_, data.assoc.name))
+                    .or_insert_with(|| (idx, Vec::new()));
                 Some(RenderTypeId::Index(*idx))
             } else {
                 None
             }
         }
         // Not supported yet
-        clean::BareFunction(_)
-        | clean::Generic(_)
-        | clean::ImplTrait(_)
-        | clean::Infer => None,
+        clean::BareFunction(_) | clean::Generic(_) | clean::ImplTrait(_) | clean::Infer => None,
     }
 }
 
@@ -853,21 +845,20 @@ fn simplify_fn_type<'tcx, 'a>(
         // Self is technically just Iterator, but we want to pretend it's more like this:
         //
         //     fn next<T>(self: Iterator<Item=T>) -> Option<T>
-        if is_self &&
-            let Type::Path { path } = arg &&
-            let def_id = path.def_id() &&
-            let Some(trait_) = cache.traits.get(&def_id) &&
-            trait_.items.iter().any(|at| at.is_ty_associated_type())
+        if is_self
+            && let Type::Path { path } = arg
+            && let def_id = path.def_id()
+            && let Some(trait_) = cache.traits.get(&def_id)
+            && trait_.items.iter().any(|at| at.is_ty_associated_type())
         {
             for assoc_ty in &trait_.items {
-                if let clean::ItemKind::TyAssocTypeItem(_generics, bounds) = &*assoc_ty.kind &&
-                    let Some(name) = assoc_ty.name
+                if let clean::ItemKind::TyAssocTypeItem(_generics, bounds) = &*assoc_ty.kind
+                    && let Some(name) = assoc_ty.name
                 {
                     let idx = -isize::try_from(rgen.len() + 1).unwrap();
-                    let (idx, stored_bounds) = rgen.entry(SimplifiedParam::AssociatedType(def_id, name))
-                        .or_insert_with(|| {
-                            (idx, Vec::new())
-                        });
+                    let (idx, stored_bounds) = rgen
+                        .entry(SimplifiedParam::AssociatedType(def_id, name))
+                        .or_insert_with(|| (idx, Vec::new()));
                     let idx = *idx;
                     if stored_bounds.is_empty() {
                         // Can't just pass stored_bounds to simplify_fn_type,
@@ -890,16 +881,22 @@ fn simplify_fn_type<'tcx, 'a>(
                                 );
                             }
                         }
-                        let stored_bounds = &mut rgen.get_mut(&SimplifiedParam::AssociatedType(def_id, name)).unwrap().1;
+                        let stored_bounds = &mut rgen
+                            .get_mut(&SimplifiedParam::AssociatedType(def_id, name))
+                            .unwrap()
+                            .1;
                         if stored_bounds.is_empty() {
                             *stored_bounds = type_bounds;
                         }
                     }
-                    ty_bindings.push((RenderTypeId::AssociatedType(name), vec![RenderType {
-                        id: Some(RenderTypeId::Index(idx)),
-                        generics: None,
-                        bindings: None,
-                    }]))
+                    ty_bindings.push((
+                        RenderTypeId::AssociatedType(name),
+                        vec![RenderType {
+                            id: Some(RenderTypeId::Index(idx)),
+                            generics: None,
+                            bindings: None,
+                        }],
+                    ))
                 }
             }
         }
