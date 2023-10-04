@@ -805,28 +805,31 @@ fn simplify_fn_type<'tcx, 'a>(
         // we will look for them but not for `T`).
         let mut ty_generics = Vec::new();
         let mut ty_bindings = Vec::new();
-        for binding in arg.bindings().unwrap_or_default() {
-            simplify_fn_binding(
-                self_,
-                generics,
-                binding,
-                tcx,
-                recurse + 1,
-                &mut ty_bindings,
-                rgen,
-                is_return,
-                cache,
-            );
-        }
-        if let Some(arg_generics) = arg.generics() {
-            for gen in arg_generics.iter() {
+        if let Some(arg_generics) = arg.generic_args() {
+            for ty in arg_generics.into_iter().filter_map(|gen| match gen {
+                clean::GenericArg::Type(ty) => Some(ty),
+                _ => None,
+            }) {
                 simplify_fn_type(
                     self_,
                     generics,
-                    gen,
+                    &ty,
                     tcx,
                     recurse + 1,
                     &mut ty_generics,
+                    rgen,
+                    is_return,
+                    cache,
+                );
+            }
+            for binding in arg_generics.bindings() {
+                simplify_fn_binding(
+                    self_,
+                    generics,
+                    &binding,
+                    tcx,
+                    recurse + 1,
+                    &mut ty_bindings,
                     rgen,
                     is_return,
                     cache,

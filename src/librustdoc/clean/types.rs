@@ -1651,16 +1651,16 @@ impl Type {
         }
     }
 
-    pub(crate) fn generics(&self) -> Option<Vec<&Type>> {
+    pub(crate) fn generic_args(&self) -> Option<&GenericArgs> {
         match self {
-            Type::Path { path, .. } => path.generics(),
+            Type::Path { path, .. } => path.generic_args(),
             _ => None,
         }
     }
 
-    pub(crate) fn bindings(&self) -> Option<&[TypeBinding]> {
+    pub(crate) fn generics(&self) -> Option<Vec<&Type>> {
         match self {
-            Type::Path { path, .. } => path.bindings(),
+            Type::Path { path, .. } => path.generics(),
             _ => None,
         }
     }
@@ -2196,6 +2196,10 @@ impl Path {
             Res::Def(DefKind::AssocTy, _) => true,
             _ => false,
         }
+    }
+
+    pub(crate) fn generic_args(&self) -> Option<&GenericArgs> {
+        self.segments.last().map(|seg| &seg.args)
     }
 
     pub(crate) fn generics(&self) -> Option<Vec<&Type>> {
