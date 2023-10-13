@@ -59,17 +59,17 @@ assert-css: ("#all-types", {"color": "#356da4"})
 // We check that we have the crates list and that the "current" on is "test_docs".
 assert-text: (".sidebar-elems ul.crate > li.current > a", "test_docs")
 // And we're also supposed to have the list of items in the current module.
-assert-text: (".sidebar-elems section ul > li:nth-child(1)", "Re-exports")
-assert-text: (".sidebar-elems section ul > li:nth-child(2)", "Modules")
-assert-text: (".sidebar-elems section ul > li:nth-child(3)", "Macros")
-assert-text: (".sidebar-elems section ul > li:nth-child(4)", "Structs")
-assert-text: (".sidebar-elems section ul > li:nth-child(5)", "Enums")
-assert-text: (".sidebar-elems section ul > li:nth-child(6)", "Constants")
-assert-text: (".sidebar-elems section ul > li:nth-child(7)", "Traits")
-assert-text: (".sidebar-elems section ul > li:nth-child(8)", "Functions")
-assert-text: (".sidebar-elems section ul > li:nth-child(9)", "Type Aliases")
-assert-text: (".sidebar-elems section ul > li:nth-child(10)", "Unions")
-assert-text: (".sidebar-elems section ul > li:nth-child(11)", "Keywords")
+assert-text: ("section.sidebar-elems ul > li:nth-child(1)", "Re-exports")
+assert-text: ("section.sidebar-elems ul > li:nth-child(2)", "Modules")
+assert-text: ("section.sidebar-elems ul > li:nth-child(3)", "Macros")
+assert-text: ("section.sidebar-elems ul > li:nth-child(4)", "Structs")
+assert-text: ("section.sidebar-elems ul > li:nth-child(5)", "Enums")
+assert-text: ("section.sidebar-elems ul > li:nth-child(6)", "Constants")
+assert-text: ("section.sidebar-elems ul > li:nth-child(7)", "Traits")
+assert-text: ("section.sidebar-elems ul > li:nth-child(8)", "Functions")
+assert-text: ("section.sidebar-elems ul > li:nth-child(9)", "Type Aliases")
+assert-text: ("section.sidebar-elems ul > li:nth-child(10)", "Unions")
+assert-text: ("section.sidebar-elems ul > li:nth-child(11)", "Keywords")
 assert-text: ("#structs + .item-table .item-name > a", "Foo")
 click: "#structs + .item-table .item-name > a"
 
@@ -80,7 +80,7 @@ assert-count: (".sidebar h2", 3)
 // We check that there is no crate listed outside of the top level.
 assert-false: ".sidebar-elems > .crate"
 
-click: ".sidebar-elems section .block li > a"
+click: "section.sidebar-elems .block li > a"
 assert-property-false: ("html", {"scrollTop": "0"})
 
 click: ".sidebar h2.location a"
@@ -100,11 +100,11 @@ assert-count: (".sidebar .location", 0)
 // We check that we have the crates list and that the "current" on is now "lib2".
 assert-text: (".sidebar-elems ul.crate > li.current > a", "lib2")
 // We now go to the "foobar" function page.
-assert-text: (".sidebar-elems > section ul.block > li:nth-child(1)", "Modules")
-assert-text: (".sidebar-elems > section ul.block > li:nth-child(2)", "Structs")
-assert-text: (".sidebar-elems > section ul.block > li:nth-child(3)", "Traits")
-assert-text: (".sidebar-elems > section ul.block > li:nth-child(4)", "Functions")
-assert-text: (".sidebar-elems > section ul.block > li:nth-child(5)", "Type Aliases")
+assert-text: ("section.sidebar-elems ul.block > li:nth-child(1)", "Modules")
+assert-text: ("section.sidebar-elems ul.block > li:nth-child(2)", "Structs")
+assert-text: ("section.sidebar-elems ul.block > li:nth-child(3)", "Traits")
+assert-text: ("section.sidebar-elems ul.block > li:nth-child(4)", "Functions")
+assert-text: ("section.sidebar-elems ul.block > li:nth-child(5)", "Type Aliases")
 assert-text: ("#functions + .item-table .item-name > a", "foobar")
 click: "#functions + .item-table .item-name > a"
 
@@ -121,15 +121,15 @@ assert-false: ".sidebar-elems > .crate"
 go-to: "./module/index.html"
 assert-property: (".sidebar", {"clientWidth": "200"})
 assert-text: (".sidebar > .sidebar-crate > h2 > a", "lib2")
-assert-text: (".sidebar > .location", "Module module")
+assert-text: (".sidebar .location", "Module module")
 assert-count: (".sidebar .location", 1)
 // Module page requires three headings:
 //   - Presistent crate branding (name and version)
 //   - Module name, followed by TOC for module headings
 //   - "In crate [name]" parent pointer, followed by sibling navigation
 assert-count: (".sidebar h2", 3)
-assert-text: (".sidebar > .sidebar-elems > h2", "In crate lib2")
-assert-property: (".sidebar > .sidebar-elems > h2 > a", {
+assert-text: (".sidebar > div.sidebar-elems > h2", "In crate lib2")
+assert-property: (".sidebar > div.sidebar-elems > h2 > a", {
     "href": "/lib2/index.html",
 }, ENDS_WITH)
 // We check that we don't have the crate list.
@@ -138,20 +138,20 @@ assert-false: ".sidebar-elems > .crate"
 go-to: "./sub_module/sub_sub_module/index.html"
 assert-property: (".sidebar", {"clientWidth": "200"})
 assert-text: (".sidebar > .sidebar-crate > h2 > a", "lib2")
-assert-text: (".sidebar > .location", "Module sub_sub_module")
-assert-text: (".sidebar > .sidebar-elems > h2", "In lib2::module::sub_module")
+assert-text: (".sidebar > section.sidebar-elems > .location", "Module sub_sub_module")
+assert-text: (".sidebar > div.sidebar-elems > h2", "In lib2::module::sub_module")
 assert-property: (".sidebar > .sidebar-elems > h2 > a", {
     "href": "/module/sub_module/index.html",
 }, ENDS_WITH)
 // We check that we don't have the crate list.
 assert-false: ".sidebar-elems .crate"
-assert-text: (".sidebar-elems > section ul > li:nth-child(1)", "Functions")
+assert-text: ("section.sidebar-elems ul > li:nth-child(1)", "Functions")
 assert-text: ("#functions + .item-table .item-name > a", "foo")
 
 // Links to trait implementations in the sidebar should not wrap even if they are long.
 go-to: "file://" + |DOC_PATH| + "/lib2/struct.HasALongTraitWithParams.html"
 assert-property: (".sidebar", {"clientWidth": "200"})
-assert-property: (".sidebar-elems section .block li > a", {"offsetHeight": 29})
+assert-property: ("section.sidebar-elems .block li > a", {"offsetHeight": 29})
 
 // Test that clicking on of the "In <module>" headings in the sidebar links to the
 // appropriate anchor in index.html.

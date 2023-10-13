@@ -29,6 +29,12 @@ nav.sub {
 	display: none;
 }
 
+/* [RUSTDOCIMPL] main scrolling */
+.rustdoc:not(.src) main {
+	overflow-y: initial;
+	max-height: initial;
+}
+
 /* Begin: styles for themes
 	Keep the default light and dark themes synchronized with the ones
 	in rustdoc.css */
@@ -42,6 +48,7 @@ nav.sub {
 	--settings-button-color: #000;
 	--settings-button-border-focus: #717171;
 	--sidebar-background-color: #f5f5f5;
+	--sidebar-split-border-color: #e0e0e0;
 	--sidebar-background-color-hover: #e0e0e0;
 	--code-block-background-color: #f5f5f5;
 	--scrollbar-track-background-color: #dcdcdc;
@@ -148,6 +155,7 @@ nav.sub {
 		--settings-button-border-focus: #ffb900;
 		--sidebar-background-color: #505050;
 		--sidebar-background-color-hover: #676767;
+		--sidebar-split-border-color: #676767;
 		--code-block-background-color: #2A2A2A;
 		--scrollbar-track-background-color: #717171;
 		--scrollbar-thumb-background-color: rgba(32, 34, 37, .6);

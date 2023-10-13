@@ -1,0 +1,23 @@
+// Checks that sidebar toc section works correctly
+go-to: "file://" + |DOC_PATH| + "/test_docs/struct.HeavilyDocumentedStruct.html"
+
+// Use the setting to hide the toc
+assert-size-false: ("section.sidebar-elems a[href='#you-know-the-drill']", {"width": 0})
+click: "#settings-menu"
+wait-for: "#settings"
+assert-property: ("#toc", {"checked": "true"})
+assert-size-false: ("section.sidebar-elems a[href='#you-know-the-drill']", {"width": 0})
+click: "#toc"
+assert-property: ("#toc", {"checked": "false"})
+assert-size: ("section.sidebar-elems a[href='#you-know-the-drill']", {"width": 0})
+
+// Make sure it survives a reload
+reload:
+assert-size: ("section.sidebar-elems a[href='#you-know-the-drill']", {"width": 0})
+click: "#settings-menu"
+wait-for: "#settings"
+assert-property: ("#toc", {"checked": "false"})
+assert-size: ("section.sidebar-elems a[href='#you-know-the-drill']", {"width": 0})
+click: "#toc"
+assert-property: ("#toc", {"checked": "true"})
+assert-size-false: ("section.sidebar-elems a[href='#you-know-the-drill']", {"width": 0})

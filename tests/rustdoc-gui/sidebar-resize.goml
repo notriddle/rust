@@ -8,10 +8,10 @@ assert-property: (".sidebar", {"clientWidth": "182"})
 // resize past maximum (don't grow past 500)
 drag-and-drop: ((185, 100), (600, 100))
 assert-property: (".sidebar", {"clientWidth": "500"})
+assert-css: (".sidebar", {"left": "0px"})
 // resize past minimum (hide sidebar)
 drag-and-drop: ((501, 100), (5, 100))
-assert-property: (".sidebar", {"clientWidth": "0"})
-assert-css: (".sidebar", {"display": "none"})
+assert-css: (".sidebar", {"left": "-1000px"})
 assert-local-storage: {"rustdoc-hide-sidebar": "true"}
 set-local-storage: {"rustdoc-hide-sidebar": "false"}
 

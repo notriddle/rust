@@ -192,6 +192,68 @@ function preLoadCss(cssUrl) {
     document.getElementsByTagName("head")[0].appendChild(link);
 }
 
+function refocusMainIfScrolling() {
+    // [RUSTDOCIMPL] main scrolling
+    //
+    // If running with split sidebar, make sure `<main>` gets focused by default.
+    const main = document.querySelector("main");
+    if (main.scrollHeight != main.offsetHeight && (!document.activeElement || document.activeElement === document.body)) {
+        main.focus();
+    }
+}
+
+// This function adds the table of contents, if it's enabled
+(function() {
+    refocusMainIfScrolling();
+    // If table of contents is enabled, fill it in with headers from top-doc.
+    const topDoc = document.querySelector(".top-doc");
+    if (!topDoc) {
+        return;
+    }
+    const sidebar = document.querySelector(".sidebar");
+    if (!sidebar) {
+        return;
+    }
+    let tocSection = document.querySelector("section.sidebar-elems");
+    let toc = null;
+    let loc = document.querySelector("section.sidebar-elems h2.location");
+    let highestHeader = "H6";
+    onEachLazy(topDoc.querySelectorAll("h2, h3, h4, h5, h6"), h2 => {
+        if (highestHeader < h2.tagName) {
+            return;
+        }
+        if (!tocSection) {
+            tocSection = document.createElement("section");
+            tocSection.className = "sidebar-elems";
+            sidebar.appendChild(tocSection);
+        }
+        if (!loc) {
+            if (hasClass(document.body, "crate")) {
+                loc = document.createElement("h2");
+                loc.className = "location toc";
+                const locLink = document.createElement("a");
+                locLink.href = "#";
+                locLink.innerText = `Crate ${window.currentCrate}`;
+                loc.appendChild(locLink);
+                tocSection.insertBefore(loc, tocSection.firstElementChild);
+            }
+        }
+        if (tocSection && loc && !toc) {
+            toc = document.createElement("ul");
+            toc.className = "block toc";
+            insertAfter(toc, loc);
+        }
+        if (loc && h2.hasAttribute("id")) {
+            const a = document.createElement("a");
+            a.href = `#${h2.id}`;
+            a.innerText = h2.innerText;
+            const li = document.createElement("li");
+            li.appendChild(a);
+            toc.appendChild(li);
+        }
+    });
+}());
+
 (function() {
     const isHelpPage = window.location.pathname.endsWith("/help.html");
 
@@ -469,7 +531,7 @@ function preLoadCss(cssUrl) {
         if (!window.SIDEBAR_ITEMS) {
             return;
         }
-        const sidebar = document.getElementsByClassName("sidebar-elems")[0];
+        const sidebar = document.querySelector("div.sidebar-elems");
 
         /**
          * Append to the sidebar a "block" of links - a heading along with a list (`<ul>`) of items.
@@ -505,11 +567,11 @@ function preLoadCss(cssUrl) {
                 }
                 const link = document.createElement("a");
                 link.href = path;
-                if (path === current_page) {
-                    link.className = "current";
-                }
                 link.textContent = name;
                 const li = document.createElement("li");
+                if (link.href === current_page) {
+                    li.className = "current";
+                }
                 li.appendChild(link);
                 ul.appendChild(li);
             }
@@ -643,7 +705,7 @@ function preLoadCss(cssUrl) {
         if (!window.ALL_CRATES) {
             return;
         }
-        const sidebarElems = document.getElementsByClassName("sidebar-elems")[0];
+        const sidebarElems = document.querySelector("div.sidebar-elems");
         if (!sidebarElems) {
             return;
         }
@@ -800,6 +862,8 @@ function preLoadCss(cssUrl) {
                 showTooltip(base);
                 base.TOOLTIP_FORCE_VISIBLE = true;
             }
+        } else {
+            refocusMainIfScrolling();
         }
     });
 
@@ -815,6 +879,13 @@ function preLoadCss(cssUrl) {
         el.addEventListener("click", () => {
             expandSection(el.hash.slice(1));
             hideSidebar();
+            const main = document.querySelector("main");
+            if (main.scrollHeight != main.offsetHeight) {
+                if (el.getAttribute("href") === "#") {
+                    main.scrollTo(0, 0);
+                    refocusMainIfScrolling();
+                }
+            }
         });
     });
 
@@ -1273,7 +1344,7 @@ href="https://doc.rust-lang.org/${channel}/rustdoc/how-to-read-rustdoc.html\
     searchState.setup();
 }());
 
-// Hide, show, and resize the sidebar
+// Hide, show, and resize the left sidebar
 //
 // The body class and CSS variable are initially set up in storage.js,
 // but in this file, we implement:
@@ -1346,10 +1417,26 @@ href="https://doc.rust-lang.org/${channel}/rustdoc/how-to-read-rustdoc.html\
     let pendingSidebarResizingFrame = false;
 
     // If this page has no sidebar at all, bail out.
-    const resizer = document.querySelector(".sidebar-resizer");
+    let resizer = document.querySelector(".sidebar-resizer");
     const sidebar = document.querySelector(".sidebar");
-    if (!resizer || !sidebar) {
+    if (!sidebar) {
         return;
+    }
+    if (!resizer) {
+        resizer = document.createElement("div");
+        resizer.className = "sidebar-resizer";
+        insertAfter(resizer, sidebar);
+    }
+
+    // The primary resizer is visible at all screen sizes. The split one
+    // is only visible if the screen is big enough.
+    const splitSection = document.querySelector("section.sidebar-elems");
+    const splitResizer = document.createElement("div");
+    splitResizer.className = "sidebar-split-resizer";
+    sidebar.insertBefore(splitResizer, splitSection);
+
+    function isSidebarSplit() {
+        return window.getComputedStyle(splitSection).position === "absolute";
     }
 
     // src page and docs page use different variables, because the contents of
@@ -1446,9 +1533,10 @@ href="https://doc.rust-lang.org/${channel}/rustdoc/how-to-read-rustdoc.html\
             return;
         }
         e.preventDefault();
-        const pos = e.clientX - sidebar.offsetLeft - 3;
+        const pos = e.clientX - 3;
         if (pos < SIDEBAR_VANISH_THRESHOLD) {
             hideSidebar();
+            sidebar.style.top = "";
         } else if (pos >= SIDEBAR_MIN) {
             if (isSidebarHidden()) {
                 showSidebar();
@@ -1457,6 +1545,11 @@ href="https://doc.rust-lang.org/${channel}/rustdoc/how-to-read-rustdoc.html\
             // than BODY_MIN
             const constrainedPos = Math.min(pos, window.innerWidth - BODY_MIN, SIDEBAR_MAX);
             changeSidebarSize(constrainedPos);
+            // resizing sidebar is position: fixed, but the document is also a container
+            // to make this work, normally we rely on position: sticky, but can't do that
+            // while resizing. The final workaround is to use position: fixed with the
+            // document still in its container, so...
+            sidebar.style.top = document.documentElement.scrollTop + "px";
             desiredSidebarSize = constrainedPos;
             if (pendingSidebarResizingFrame !== false) {
                 clearTimeout(pendingSidebarResizingFrame);
@@ -1484,6 +1577,13 @@ href="https://doc.rust-lang.org/${channel}/rustdoc/how-to-read-rustdoc.html\
         } else if (desiredSidebarSize !== null && desiredSidebarSize > SIDEBAR_MIN) {
             changeSidebarSize(desiredSidebarSize);
         }
+        // If the split sidebar gets too small, reset it back to its default size
+        const isSplit = isSidebarSplit();
+        if (!isSplit || (splitSection && splitSection.clientWidth <= SIDEBAR_MIN)) {
+            splitSection.style.removeProperty("--width-limiter-width");
+            document.documentElement.style.removeProperty("--width-limiter-width");
+            updateLocalStorage("width-limiter-width", null);
+        }
     });
     function stopResize(e) {
         if (currentPointerId === null) {
@@ -1492,17 +1592,32 @@ href="https://doc.rust-lang.org/${channel}/rustdoc/how-to-read-rustdoc.html\
         if (e) {
             e.preventDefault();
         }
+        sidebar.style.top = "";
         desiredSidebarSize = sidebar.getBoundingClientRect().width;
         removeClass(resizer, "active");
         window.removeEventListener("pointermove", resize, false);
         window.removeEventListener("pointerup", stopResize, false);
         removeClass(document.documentElement, "sidebar-resizing");
         document.documentElement.style.removeProperty( "--resizing-sidebar-width");
+        if (desiredSidebarSize !== 0) {
+            if (isSrcPage) {
+                // [RUSTDOCIMPL] CSS variable fast path
+                //
+                // While this property is set on the HTML element at load time,
+                // because the sidebar isn't actually loaded yet,
+                // we scope this update to the sidebar to avoid hitting a slow
+                // path in WebKit.
+                document.documentElement.style.setProperty("--src-sidebar-width", desiredSidebarSize + "px");
+            } else {
+                document.documentElement.style.setProperty("--desktop-sidebar-width", desiredSidebarSize + "px");
+            }
+        }
         if (resizer.releasePointerCapture) {
             resizer.releasePointerCapture(currentPointerId);
             currentPointerId = null;
         }
     }
+    // start resizing the right sidebar
     function initResize(e) {
         if (currentPointerId !== null || e.altKey || e.ctrlKey || e.metaKey || e.button !== 0) {
             return;
@@ -1526,8 +1641,129 @@ href="https://doc.rust-lang.org/${channel}/rustdoc/how-to-read-rustdoc.html\
         const pos = e.clientX - sidebar.offsetLeft - 3;
         document.documentElement.style.setProperty( "--resizing-sidebar-width", pos + "px");
         desiredSidebarSize = null;
+        // resizing sidebar is position: fixed, but the document is also a container
+        // to make this work, normally we rely on position: sticky, but can't do that
+        // while resizing. The final workaround is to use position: fixed with the
+        // document still in its container, so...
+        sidebar.style.top = document.documentElement.scrollTop + "px";
     }
     resizer.addEventListener("pointerdown", initResize, false);
+    if (splitResizer) {
+        // This function is very similar to the one for the main sidebar,
+        // but it's far enough apart that reusing it causes spaghettification:
+        //
+        // - This function doesn't need to deal with src pages.
+        // - The "desired size" isn't tracked for the split sidebar. When it's
+        //   open, it naturally resizes with the viewport instead.
+        // - It's a lot more eager to go away entirely.
+        // - We're technically setting the size of the *body text*, not the sidebar.
+        let currentPointerIdSplit = null;
+        function stopResizeSplit(e) {
+            if (currentPointerIdSplit === null) {
+                return;
+            }
+            if (e) {
+                e.preventDefault();
+            }
+            removeClass(splitResizer, "active");
+            removeClass(document.documentElement, "sidebar-resizing");
+            window.removeEventListener("pointermove", resizeSplit, false);
+            window.removeEventListener("pointerup", stopResizeSplit, false);
+            if (splitResizer.releasePointerCapture) {
+                splitResizer.releasePointerCapture(currentPointerIdSplit);
+                currentPointerIdSplit = null;
+            }
+            const bodyWidth = splitSection.style.getPropertyValue("--width-limiter-width");
+            if (bodyWidth) {
+                document.documentElement.style.setProperty(
+                    "--width-limiter-width",
+                    bodyWidth
+                );
+                updateLocalStorage("width-limiter-width", bodyWidth.replace("px", ""));
+            }
+            if (isSidebarSplit()) {
+                updateLocalStorage("sidebar-split", "true");
+            } else {
+                updateLocalStorage("width-limiter-width", null);
+                updateLocalStorage("sidebar-split", "false");
+                document.documentElement.style.removeProperty("--width-limiter-width");
+            }
+            splitSection.style.removeProperty("--width-limiter-width");
+            splitResizer.style.removeProperty("--width-limiter-width");
+            // resizing sidebar is position: fixed, but the document is also a container
+            // to make this work, normally we rely on position: sticky, but can't do that
+            // while resizing. The final workaround is to use position: fixed with the
+            // document still in its container, so...
+            sidebar.style.top = "";
+            document.documentElement.style.removeProperty( "--resizing-sidebar-width");
+        }
+        function initResizeSplit(e) {
+            if (currentPointerIdSplit !== null || e.altKey || e.ctrlKey || e.metaKey || e.button !== 0) {
+                return;
+            }
+            if (splitResizer.setPointerCapture) {
+                splitResizer.setPointerCapture(e.pointerId);
+                if (!splitResizer.hasPointerCapture(e.pointerId)) {
+                    // unable to capture pointer; something else has it
+                    // on iOS, this usually means you long-clicked a link instead
+                    splitResizer.releasePointerCapture(e.pointerId);
+                    return;
+                }
+                currentPointerIdSplit = e.pointerId;
+            }
+            e.preventDefault();
+            window.addEventListener("pointermove", resizeSplit, false);
+            window.addEventListener("pointercancel", stopResizeSplit, false);
+            window.addEventListener("pointerup", stopResizeSplit, false);
+            addClass(document.documentElement, "sidebar-resizing");
+            addClass(splitResizer, "active");
+            // resizing sidebar is position: fixed, but the document is also a container
+            // to make this work, normally we rely on position: sticky, but can't do that
+            // while resizing. The final workaround is to use position: fixed with the
+            // document still in its container, so...
+            sidebar.style.top = document.documentElement.scrollTop + "px";
+            document.documentElement.style.setProperty( "--resizing-sidebar-width", sidebar.clientWidth + "px");
+        }
+        function resizeSplit(e) {
+            if (currentPointerIdSplit === null || currentPointerIdSplit !== e.pointerId) {
+                return;
+            }
+            e.preventDefault();
+            const splitSidebarWidth = window.innerWidth - e.clientX;
+            if (splitSidebarWidth < SIDEBAR_VANISH_THRESHOLD) {
+                addClass(document.documentElement, "sidebar-nosplit");
+            } else if (splitSidebarWidth >= SIDEBAR_MIN) {
+                removeClass(document.documentElement, "sidebar-nosplit");
+                // don't let the sidebar get wider than SIDEBAR_MAX, or the body narrower
+                // than BODY_MIN
+                const primarySidebarWidth = isSidebarHidden() ? 0 : sidebar.getBoundingClientRect().width;
+                const constrainedWidth = Math.min(splitSidebarWidth, window.innerWidth - BODY_MIN, SIDEBAR_MAX);
+                const bodySize = window.innerWidth - primarySidebarWidth - constrainedWidth - 90;
+                splitSection.style.setProperty(
+                    "--width-limiter-width",
+                    bodySize + "px"
+                );
+                splitResizer.style.setProperty(
+                    "--width-limiter-width",
+                    bodySize + "px"
+                );
+                if (pendingSidebarResizingFrame !== false) {
+                    clearTimeout(pendingSidebarResizingFrame);
+                }
+                pendingSidebarResizingFrame = setTimeout(() => {
+                    if (currentPointerIdSplit === null || pendingSidebarResizingFrame === false) {
+                        return;
+                    }
+                    pendingSidebarResizingFrame = false;
+                    document.documentElement.style.setProperty(
+                        "--width-limiter-width",
+                        bodySize + "px"
+                    );
+                }, 100);
+            }
+        }
+        splitResizer.addEventListener("pointerdown", initResizeSplit, false);
+    }
 }());
 
 // This section handles the copy button that appears next to the path breadcrumbs

@@ -12,7 +12,8 @@ press-key: "Escape"
 wait-for-css: ("#settings", {"display": "none"})
 
 drag-and-drop: ((205, 100), (5, 100))
-assert-css: (".sidebar", {"display": "none"})
+// hidden off-screen
+assert-css: (".sidebar", {"left": "-1000px"})
 
 // Verify that the "hide" option is checked
 focus: "#settings-menu a"
@@ -20,4 +21,4 @@ press-key: "Enter"
 wait-for-css: ("#settings", {"display": "block"})
 assert-property: ("#hide-sidebar", {"checked": "true"})
 click: "#hide-sidebar"
-wait-for-css: (".sidebar", {"display": "block"})
+assert-css: (".sidebar", {"left": "0px"})

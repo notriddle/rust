@@ -1,0 +1,108 @@
+// Checks that sidebar split works correctly.
+go-to: "file://" + |DOC_PATH| + "/test_docs/struct.HeavilyDocumentedStruct.html"
+
+// make sure, at mobile size, the sidebar isn't split
+set-window-size: (600, 600)
+compare-elements-position-near: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+assert-size: ("section.sidebar-elems", {"width": 200})
+
+// make sure, at tablet size, the sidebar isn't split
+set-window-size: (1024, 600)
+compare-elements-position-near: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+assert-size: ("section.sidebar-elems", {"width": 200})
+
+// make sure, at desktop size, the sidebar gets split
+set-window-size: (2160, 600)
+compare-elements-position-near-false: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+assert-size: ("section.sidebar-elems", {"width": 910})
+
+// When sidebar is split, make sure the scroll buttons work.
+assert-property: ("html", {"scrollTop": "0"})
+assert-property: ("main", {"scrollTop": "0"})
+click: "section.sidebar-elems a[href='#impl-Any-for-T']"
+// in JS, main scrolls, html doesn't
+assert-property-false: ("main", {"scrollTop": "0"})
+assert-property: ("html", {"scrollTop": "0"})
+click: "section.sidebar-elems a[href='#']"
+assert-property: ("main", {"scrollTop": "0"})
+
+// When the main sidebar is hidden, make sure the other sidebar fills the empty.
+click: "#settings-menu"
+wait-for: "#settings"
+click: "#hide-sidebar"
+wait-for-css: (".sidebar", {"left": "-1000px"})
+assert-size: ("main", {"width": 1050})
+assert-size: ("section.sidebar-elems", {"width": 1110})
+click: "#hide-sidebar"
+wait-for-css: (".sidebar", {"left": "0px"})
+assert-size: (".sidebar", {"width": 200})
+assert-size: ("main", {"width": 1050})
+assert-size: ("section.sidebar-elems", {"width": 910})
+click: "#settings-menu"
+
+// Now let's try resizing it, when the primary sidebar is open,
+// so that it stays open.
+drag-and-drop: ((1252, 100), (1900, 100))
+assert-size: ("main", {"width": 1700})
+assert-size: ("section.sidebar-elems", {"width": 260})
+// it should still be open
+compare-elements-position-near-false: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+
+// Now try resizing it to nothing.
+drag-and-drop: ((1900, 100), (2160, 100))
+// now it's closed
+compare-elements-position-near: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+
+// Bring it back with the settings menu, and hide the left sidebar.
+click: "#settings-menu"
+wait-for: "#settings"
+click: "#sidebar-split"
+click: "#hide-sidebar"
+compare-elements-position-near-false: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+assert-css: (".sidebar", {"left": "-1000px"})
+click: "#settings-menu"
+
+// Now let's try resizing it, this time with the main sidebar closed,
+// so that the split sidebar remains visible.
+// 960 + 45 = 1005
+assert-size: ("main", {"width": 1050})
+assert-size: ("section.sidebar-elems", {"width": 1110})
+drag-and-drop: ((1050, 100), (1900, 100))
+assert-size: ("main", {"width": 1900})
+assert-size: ("section.sidebar-elems", {"width": 260})
+// it should still be open
+compare-elements-position-near-false: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+
+// Now try resizing it to nothing.
+drag-and-drop: ((1900, 100), (2160, 100))
+// now it's closed
+compare-elements-position-near: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+
+// Now, check how it works with JS disabled
+javascript: false
+reload:
+
+// make sure, at mobile size, the sidebar isn't split
+set-window-size: (600, 600)
+compare-elements-position-near: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+assert-size: ("section.sidebar-elems", {"width": 200})
+
+// make sure, at tablet size, the sidebar isn't split
+set-window-size: (1024, 600)
+compare-elements-position-near: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+assert-size: ("section.sidebar-elems", {"width": 200})
+
+// make sure, at desktop size, the sidebar gets split
+set-window-size: (2160, 600)
+compare-elements-position-near-false: ("section.sidebar-elems", "div.sidebar-elems", {"x": 1})
+assert-size: ("section.sidebar-elems", {"width": 910})
+
+// When sidebar is split, make sure the scroll buttons work.
+assert-property: ("html", {"scrollTop": "0"})
+assert-property: ("main", {"scrollTop": "0"})
+click: "section.sidebar-elems a[href='#impl-Any-for-T']"
+// in no-JS, html scrolls, main doesn't
+assert-property-false: ("html", {"scrollTop": "0"})
+assert-property: ("main", {"scrollTop": "0"})
+click: "section.sidebar-elems a[href='#']"
+assert-property: ("html", {"scrollTop": "0"})

@@ -211,6 +211,16 @@ if (getSettingValue("hide-sidebar") === "true") {
     // Set a class on the `<html>` element instead.
     addClass(document.documentElement, "hide-sidebar");
 }
+if (getSettingValue("sidebar-split") === "false") {
+    // At this point in page load, `document.body` is not available yet.
+    // Set a class on the `<html>` element instead.
+    addClass(document.documentElement, "sidebar-nosplit");
+}
+if (getSettingValue("toc") === "false") {
+    // At this point in page load, `document.body` is not available yet.
+    // Set a class on the `<html>` element instead.
+    addClass(document.documentElement, "hide-toc");
+}
 function updateSidebarWidth() {
     const desktopSidebarWidth = getSettingValue("desktop-sidebar-width");
     if (desktopSidebarWidth && desktopSidebarWidth !== "null") {
@@ -224,6 +234,13 @@ function updateSidebarWidth() {
         document.documentElement.style.setProperty(
             "--src-sidebar-width",
             srcSidebarWidth + "px"
+        );
+    }
+    const widthLimiterWidth = getSettingValue("width-limiter-width");
+    if (widthLimiterWidth && widthLimiterWidth !== "null") {
+        document.documentElement.style.setProperty(
+            "--width-limiter-width",
+            widthLimiterWidth + "px"
         );
     }
 }

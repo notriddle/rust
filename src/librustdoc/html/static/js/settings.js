@@ -29,13 +29,27 @@
                     window.rustdoc_remove_line_numbers_from_examples();
                 }
                 break;
-            case "hide-sidebar":
-                if (value === true) {
-                    addClass(document.documentElement, "hide-sidebar");
-                } else {
-                    removeClass(document.documentElement, "hide-sidebar");
-                }
-                break;
+                case "hide-sidebar":
+                    if (value === true) {
+                        addClass(document.documentElement, "hide-sidebar");
+                    } else {
+                        removeClass(document.documentElement, "hide-sidebar");
+                    }
+                    break;
+                case "sidebar-split":
+                    if (value === true) {
+                        removeClass(document.documentElement, "sidebar-nosplit");
+                    } else {
+                        addClass(document.documentElement, "sidebar-nosplit");
+                    }
+                    break;
+                case "toc":
+                    if (value === true) {
+                        removeClass(document.documentElement, "hide-toc");
+                    } else {
+                        addClass(document.documentElement, "hide-toc");
+                    }
+                    break;
         }
     }
 
@@ -197,6 +211,16 @@
                 "name": "Hide persistent navigation bar",
                 "js_name": "hide-sidebar",
                 "default": false,
+            },
+            {
+                "name": "Two sidebars on large screens",
+                "js_name": "sidebar-split",
+                "default": true,
+            },
+            {
+                "name": "Show documentation headers in sidebar",
+                "js_name": "toc",
+                "default": true,
             },
             {
                 "name": "Disable keyboard shortcuts",
