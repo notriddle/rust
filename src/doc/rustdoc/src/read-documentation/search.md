@@ -115,6 +115,30 @@ can be matched with the following queries:
 Each of the above queries is progressively looser, except the last one
 would not match `dyn Iterator`, since that's not a type parameter.
 
+If a bound has multiple associated types, specifying the name allows you to
+pick which one gets matched. If no name is specified, then the query will
+match of any of them. For example,
+
+```rust
+pub trait MyTrait {
+    type First;
+    type Second;
+}
+
+/// This function can be found using the following search queries:
+///
+///     MyTrait<First=u8, Second=u32> -> bool
+///     MyTrait<u32, First=u8> -> bool
+///     MyTrait<Second=u32> -> bool
+///     MyTrait<u32, u8> -> bool
+///
+/// The following queries, however, will *not* match it:
+///
+///     MyTrait<First=u32> -> bool
+///     MyTrait<u32, u32> -> bool
+pub fn my_fn(x: impl MyTrait<First=u8, Second=u32>) -> bool { true }
+```
+
 Generics and function parameters are order-agnostic, but sensitive to nesting
 and number of matches. For example, a function with the signature
 `fn read_all(&mut self: impl Read) -> Result<Vec<u8>, Error>`
@@ -142,6 +166,10 @@ Most of these limitations should be addressed in future version of Rustdoc.
     You can name traits directly, and if there's a type parameter
     with that bound, it'll match, but `option<T> -> T where T: Default`
     cannot be precisely searched for (use `option<Default> -> Default`).
+
+  * Supertraits, type aliases, and Deref are all ignored. Search mostly
+    operates on type signatures *as written*, and not as they are
+    represented within the compiler.
 
   * Type parameters match type parameters, such that `Option<A>` matches
     `Option<T>`, but never match concrete types in function signatures.
