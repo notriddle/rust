@@ -289,26 +289,6 @@ function initSearch(rawSearchIndex) {
         }
     }
 
-    function isWhitespace(c) {
-        return " \t\n\r".indexOf(c) !== -1;
-    }
-
-    function isSpecialStartCharacter(c) {
-        return "<\"".indexOf(c) !== -1;
-    }
-
-    function isEndCharacter(c) {
-        return "=,>-]".indexOf(c) !== -1;
-    }
-
-    function isStopCharacter(c) {
-        return isEndCharacter(c);
-    }
-
-    function isErrorCharacter(c) {
-        return "()".indexOf(c) !== -1;
-    }
-
     function itemTypeFromName(typename) {
         const index = itemTypes.findIndex(i => i === typename);
         if (index < 0) {
@@ -317,716 +297,317 @@ function initSearch(rawSearchIndex) {
         return index;
     }
 
-    /**
-     * If we encounter a `"`, then we try to extract the string from it until we find another `"`.
-     *
-     * This function will throw an error in the following cases:
-     * * There is already another string element.
-     * * We are parsing a generic argument.
-     * * There is more than one element.
-     * * There is no closing `"`.
-     *
-     * @param {ParsedQuery} query
-     * @param {ParserState} parserState
-     * @param {boolean} isInGenerics
-     */
-    function getStringElem(query, parserState, isInGenerics) {
-        if (isInGenerics) {
-            throw ["Unexpected ", "\"", " in generics"];
-        } else if (query.literalSearch) {
-            throw ["Cannot have more than one literal search element"];
-        } else if (parserState.totalElems - parserState.genericsElems > 0) {
-            throw ["Cannot use literal search when there is more than one element"];
-        }
-        parserState.pos += 1;
-        const start = parserState.pos;
-        const end = getIdentEndPosition(parserState);
-        if (parserState.pos >= parserState.length) {
-            throw ["Unclosed ", "\""];
-        } else if (parserState.userQuery[end] !== "\"") {
-            throw ["Unexpected ", parserState.userQuery[end], " in a string element"];
-        } else if (start === end) {
-            throw ["Cannot have empty string element"];
-        }
-        // To skip the quote at the end.
-        parserState.pos += 1;
-        query.literalSearch = true;
-    }
-
-    /**
-     * Returns `true` if the current parser position is starting with "::".
-     *
-     * @param {ParserState} parserState
-     *
-     * @return {boolean}
-     */
-    function isPathStart(parserState) {
-        return parserState.userQuery.slice(parserState.pos, parserState.pos + 2) === "::";
-    }
-
-    /**
-     * Returns `true` if the current parser position is starting with "->".
-     *
-     * @param {ParserState} parserState
-     *
-     * @return {boolean}
-     */
-    function isReturnArrow(parserState) {
-        return parserState.userQuery.slice(parserState.pos, parserState.pos + 2) === "->";
-    }
-
-    /**
-     * Returns `true` if the given `c` character is valid for an ident.
-     *
-     * @param {string} c
-     *
-     * @return {boolean}
-     */
-    function isIdentCharacter(c) {
-        return (
-            c === "_" ||
-            (c >= "0" && c <= "9") ||
-            (c >= "a" && c <= "z") ||
-            (c >= "A" && c <= "Z"));
-    }
-
-    /**
-     * Returns `true` if the given `c` character is a separator.
-     *
-     * @param {string} c
-     *
-     * @return {boolean}
-     */
-    function isSeparatorCharacter(c) {
-        return c === "," || c === "=";
-    }
-
-/**
-     * Returns `true` if the given `c` character is a path separator. For example
-     * `:` in `a::b` or a whitespace in `a b`.
-     *
-     * @param {string} c
-     *
-     * @return {boolean}
-     */
-    function isPathSeparator(c) {
-        return c === ":" || isWhitespace(c);
-    }
-
-    /**
-     * Returns `true` if the previous character is `lookingFor`.
-     *
-     * @param {ParserState} parserState
-     * @param {String} lookingFor
-     *
-     * @return {boolean}
-     */
-    function prevIs(parserState, lookingFor) {
-        let pos = parserState.pos;
-        while (pos > 0) {
-            const c = parserState.userQuery[pos - 1];
-            if (c === lookingFor) {
-                return true;
-            } else if (!isWhitespace(c)) {
-                break;
-            }
-            pos -= 1;
-        }
-        return false;
-    }
-
-    /**
-     * Returns `true` if the last element in the `elems` argument has generics.
-     *
-     * @param {Array<QueryElement>} elems
-     * @param {ParserState} parserState
-     *
-     * @return {boolean}
-     */
-    function isLastElemGeneric(elems, parserState) {
-        return (elems.length > 0 && elems[elems.length - 1].generics.length > 0) ||
-            prevIs(parserState, ">");
-    }
-
-    /**
-     * Increase current parser position until it doesn't find a whitespace anymore.
-     *
-     * @param {ParserState} parserState
-     */
-    function skipWhitespace(parserState) {
-        while (parserState.pos < parserState.userQuery.length) {
-            const c = parserState.userQuery[parserState.pos];
-            if (!isWhitespace(c)) {
-                break;
-            }
-            parserState.pos += 1;
-        }
-    }
-
-    /**
-     * @param {ParsedQuery} query
-     * @param {ParserState} parserState
-     * @param {string} name                  - Name of the query element.
-     * @param {Array<QueryElement>} generics - List of generics of this query element.
-     *
-     * @return {QueryElement}                - The newly created `QueryElement`.
-     */
-    function createQueryElement(query, parserState, name, generics, isInGenerics) {
-        const path = name.trim();
-        if (path.length === 0 && generics.length === 0) {
-            throw ["Unexpected ", parserState.userQuery[parserState.pos]];
-        } else if (path === "*") {
-            throw ["Unexpected ", "*"];
-        }
-        if (query.literalSearch && parserState.totalElems - parserState.genericsElems > 0) {
-            throw ["Cannot have more than one element if you use quotes"];
-        }
-        const typeFilter = parserState.typeFilter;
-        parserState.typeFilter = null;
-        if (name === "!") {
-            if (typeFilter !== null && typeFilter !== "primitive") {
-                throw [
-                    "Invalid search type: primitive never type ",
-                    "!",
-                    " and ",
-                    typeFilter,
-                    " both specified",
-                ];
-            }
-            if (generics.length !== 0) {
-                throw [
-                    "Never type ",
-                    "!",
-                    " does not accept generic parameters",
-                ];
-            }
-            const bindingName = parserState.isInBinding;
-            parserState.isInBinding = null;
-            return {
-                name: "never",
-                id: null,
-                fullPath: ["never"],
-                pathWithoutLast: [],
-                pathLast: "never",
-                generics: [],
-                bindings: new Map(),
-                typeFilter: "primitive",
-                bindingName,
-            };
-        }
-        if (path.startsWith("::")) {
-            throw ["Paths cannot start with ", "::"];
-        } else if (path.endsWith("::")) {
-            throw ["Paths cannot end with ", "::"];
-        } else if (path.includes("::::")) {
-            throw ["Unexpected ", "::::"];
-        } else if (path.includes(" ::")) {
-            throw ["Unexpected ", " ::"];
-        } else if (path.includes(":: ")) {
-            throw ["Unexpected ", ":: "];
-        }
-        const pathSegments = path.split(/::|\s+/);
-        // In case we only have something like `<p>`, there is no name.
-        if (pathSegments.length === 0 || (pathSegments.length === 1 && pathSegments[0] === "")) {
-            if (generics.length > 0 || prevIs(parserState, ">")) {
-                throw ["Found generics without a path"];
-            } else {
-                throw ["Unexpected ", parserState.userQuery[parserState.pos]];
-            }
-        }
-        for (const [i, pathSegment] of pathSegments.entries()) {
-            if (pathSegment === "!") {
-                if (i !== 0) {
-                    throw ["Never type ", "!", " is not associated item"];
-                }
-                pathSegments[i] = "never";
-            }
-        }
-        parserState.totalElems += 1;
-        if (isInGenerics) {
-            parserState.genericsElems += 1;
-        }
-        const bindingName = parserState.isInBinding;
-        parserState.isInBinding = null;
-        const bindings = new Map();
+    function newLexer(text) {
         return {
-            name: name.trim(),
-            id: null,
-            fullPath: pathSegments,
-            pathWithoutLast: pathSegments.slice(0, pathSegments.length - 1),
-            pathLast: pathSegments[pathSegments.length - 1],
-            generics: generics.filter(gen => {
-                // Syntactically, bindings are parsed as generics,
-                // but the query engine treats them differently.
-                if (gen.bindingName !== null) {
-                    bindings.set(gen.bindingName.name, [gen, ...gen.bindingName.generics]);
-                    return false;
+            text,
+            offset: 0,
+            literalSearch: false,
+        };
+    }
+
+    const TOKENIZER_REGEX = /\s*(?:(?:"([^"]*)")|(->)|([a-zA-Z0-9_!]+)|(::?|[^\s]))\s*/g;
+    function nextTokenFromLexer(lexer) {
+        TOKENIZER_REGEX.lastIndex = lexer.offset;
+        const result = TOKENIZER_REGEX.exec(lexer.text);
+        if (result === null) {
+            return ["eof", "eof"];
+        }
+        lexer.offset = TOKENIZER_REGEX.lastIndex;
+        if (result[1] !== undefined) {
+            return ["lit", result[1]];
+        }
+        if (result[2] !== undefined) {
+            return ["op", result[2]];
+        }
+        if (result[4] !== undefined) {
+            return ["op", result[4]];
+        }
+        return ["ident", result[3]];
+    }
+    function peekTokenFromLexer(lexer) {
+        const save = lexer.offset;
+        const result = nextTokenFromLexer(lexer);
+        lexer.offset = save;
+        return result;
+    }
+    function eatTokenFromLexer(lexer, ty, ...toks) {
+        const save = lexer.offset;
+        const [rTy, rTok] = nextTokenFromLexer(lexer);
+        if (rTy !== ty || toks.indexOf(rTok) === -1) {
+            lexer.offset = save;
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * The table of syntactic elements that participate in precedence.
+     *
+     * This does not contain `[]`, `<>`, or the macro/never `!`. The brackets are
+     * special-cased, and the `!` is treated as part of the identifier lexeme and
+     * post-processed into its final representation.
+     *
+     * Elements with higher "binding power" bind tighter. For example,
+     * in the query `a::b,c`, the `,` has lower binding power than the `::`,
+     * so it gets parsed as `(, (:: a b) c)`, if we represent the resulting AST
+     * as LISP (the `cons` function builds a less uniform AST than that, for
+     * the benefit of the matching engine).
+     *
+     * @type {{string}: ParserSyntaxOperator}
+     */
+    const INFIX_OPERATORS = {
+        ",": {
+            bindingPower: [3, 2],
+            cons: function commaCons(lhsAst, rhsAst) {
+                return lhsAst.concat(rhsAst);
+            },
+        },
+        ":": {
+            bindingPower: [2, 4],
+            cons: function typeFilterCons(lhsAst, rhsAst) {
+                const [lhs] = lhsAst;
+                const [rhs] = rhsAst;
+                if (lhs.fullPath.length > 1) {
+                    throw ["Multiple ", "::", " path components not allowed in type filter"];
                 }
-                return true;
-            }),
-            bindings,
-            typeFilter,
-            bindingName,
+                if (lhs.generics !== null) {
+                    throw ["Unexpected ", "<", " in type filter (before ", ":", ")"];
+                }
+                if (rhs.typeFilter !== null) {
+                    throw [
+                        "Invalid search type: ",
+                        rhs.typeFilter,
+                        " and ",
+                        lhs.name,
+                        " both specified",
+                    ];
+                }
+                rhs.typeFilter = lhs.name;
+                return rhsAst;
+            },
+        },
+        "=": {
+            bindingPower: [10, 3],
+            cons: function assocTypeConstraintCons(lhsAst, rhsAst) {
+                const [lhs] = lhsAst;
+                if (lhs.fullPath.length > 1) {
+                    throw [
+                        "Multiple ",
+                        "::",
+                        " path components not allowed in associated type constraint",
+                    ];
+                }
+                if (lhs.typeFilter !== null) {
+                    throw ["Cannot use type filter ", ":", " in associated type constraint"];
+                }
+                if (lhs.generics === null) {
+                    lhs.generics = rhsAst;
+                } else {
+                    lhs.generics = rhsAst.concat(lhs.generics);
+                }
+                lhs.typeFilter = "=";
+                return lhsAst;
+            },
+        },
+        "::": {
+            bindingPower: [12, 13],
+            cons: function pathCons(lhsAst, rhsAst) {
+                const [lhs] = lhsAst;
+                const [rhs] = rhsAst;
+                if (lhs.generics !== null) {
+                    throw ["Generic ", "<>", " must be at end of path"];
+                }
+                rhs.name = `${lhs.name}::${rhs.name}`;
+                rhs.fullPath = lhs.fullPath.concat(rhs.fullPath);
+                return rhsAst;
+            },
+        },
+    };
+
+    /**
+     * Parses a single level of nesting in a query string into an AST.
+     *
+     * @param {Lexer} lexer
+     * @param {integer} minBindingPower - See `INFIX_OPERATORS` for information
+     * @returns {[QueryElement]} - the final comma-separated list of types
+     */
+    function parseElements(lexer, minBindingPower, isNested) {
+        let syntaxOp;
+        // leading comma
+        eatTokenFromLexer(lexer, "op", ",");
+        // expression starts with `[`, ident, or literal
+        let lhsAst = [];
+        if (eatTokenFromLexer(lexer, "op", "[")) {
+            lhsAst = makeAstFromIdent("[]");
+            lhsAst.generics = parseElements(lexer, 0, true);
+            lhsAst = [lhsAst];
+            if (!eatTokenFromLexer(lexer, "op", "]")) {
+                if (eatTokenFromLexer(lexer, "eof", "eof")) {
+                    throw ["Unclosed ", "["];
+                }
+                throw ["Expected ", "]", ", found ", nextTokenFromLexer(lexer)[1]];
+            }
+        } else {
+            const [lhsType, lhs] = peekTokenFromLexer(lexer);
+            if (lhsType === "ident") {
+                nextTokenFromLexer(lexer);
+                lhsAst = [makeAstFromIdent(lhs)];
+            } else if (lhsType === "lit") {
+                if (isNested) {
+                    throw ["Quoted literal searches cannot be used with generics"];
+                }
+                nextTokenFromLexer(lexer);
+                lhsAst = [makeAstFromLit(lhs)];
+                lexer.literalSearch = true;
+                // a quoted literal must be immediately followed by `<` or `eof`
+                // this lookahead is not needed, but it makes a better error message
+                if (eatTokenFromLexer(lexer, "op", ":")) {
+                    throw ["Cannot use quotes on type filter"];
+                }
+                return lhsAst;
+                // error handling
+            } else if (lhsType === "op" && lhs === "<") {
+                throw ["Found generics without a path"];
+            } else if (lhsType === "op" && lhs === ":") {
+                throw ["Expected type filter before ", lhs];
+            } else if (lhsType === "op" && lhs === "::") {
+                throw ["Unexpected ", lhs, ": paths cannot start with ", lhs];
+            } else {
+                return [];
+            }
+        }
+        for (;;) {
+            const [opType, op] = peekTokenFromLexer(lexer);
+            if (opType === "ident") {
+                // space separated items are equivalent to ::
+                nextTokenFromLexer(lexer);
+                const lhs = lhsAst[lhsAst.length - 1];
+                const rhs = makeAstFromIdent(op);
+                if (lhs.generics !== null) {
+                    throw ["Generic ", "<>", " must be at end of path"];
+                }
+                rhs.name = `${lhs.name} ${rhs.name}`;
+                rhs.fullPath = lhs.fullPath.concat(rhs.fullPath);
+                lhsAst = [rhs];
+            } else if (eatTokenFromLexer(lexer, "op", "<")) {
+                const rhsAst = parseElements(lexer, 0, true);
+                if (!eatTokenFromLexer(lexer, "op", ">")) {
+                    if (eatTokenFromLexer(lexer, "eof", "eof")) {
+                        throw ["Unclosed ", "<"];
+                    }
+                    throw ["Expected ", ">", ", found ", nextTokenFromLexer(lexer)[1]];
+                }
+                const lhs = lhsAst[lhsAst.length - 1];
+                if (lhs.generics !== null) {
+                    throw ["Cannot use multiple ", "<>", " generics on one path"];
+                }
+                lhs.generics = rhsAst.filter(rhs => {
+                    const isConstraint = rhs.typeFilter === "=";
+                    if (isConstraint) {
+                        lhs.bindings.set(rhs.name, rhs.generics);
+                    }
+                    return !isConstraint;
+                });
+                continue;
+            } else if (opType === "op") {
+                syntaxOp = INFIX_OPERATORS[op];
+                if (!syntaxOp) {
+                    break;
+                }
+                const [lhBp, rhBp] = syntaxOp.bindingPower;
+                if (lhBp < minBindingPower) {
+                    break;
+                }
+                const saveOffset = lexer.offset;
+                nextTokenFromLexer(lexer);
+                // This lookahead is not necessary, but it makes the error message nicer.
+                if (op === "::" && eatTokenFromLexer(lexer, "op", "::", ":")) {
+                    throw ["Unexpected ", ":::"];
+                }
+                // Actual parsing.
+                const rhs = parseElements(lexer, rhBp, isNested);
+                if (rhs.length !== 0) {
+                    lhsAst = syntaxOp.cons(lhsAst, rhs);
+                    continue;
+                }
+                // none of these are necessary, but they make better
+                // error messages
+                if (op === ":") {
+                    const lhsLast = lhsAst[lhsAst.length - 1];
+                    if (lhsLast.generics !== null) {
+                        throw [
+                            "Unexpected ",
+                            ":",
+                            " (did you mean ",
+                            `struct:${lhsLast.name}<${lhsLast.generics.map(g => g.name).join(", ")}>`,
+                            "?)",
+                        ];
+                    }
+                    if (itemTypes.findIndex(i => i === lhsLast.name) === -1) {
+                        throw [
+                            "Unexpected ",
+                            ":",
+                            " (did you mean ",
+                            `struct:${lhsLast.name}`,
+                            "?)",
+                        ];
+                    }
+                    throw ["Unexpected ", ":", " (expected path after type filter ", `${lhsLast.name}:`, ")"];
+                } else if (op === "::") {
+                    throw ["Paths cannot end with ", "::"];
+                } else {
+                    lexer.offset = saveOffset;
+                    break;
+                }
+            }
+            break;
+        }
+
+        return lhsAst;
+    }
+
+    /**
+     * @param {string} ident - string representing a single path element (no `::`)
+     * @returns {QueryElement}
+     */
+    function makeAstFromIdent(ident) {
+        return {
+            name: ident,
+            id: null,
+            fullPath: [ident],
+            pathLast: ident,
+            generics: null,
+            bindings: new Map(),
+            typeFilter: null,
         };
     }
 
     /**
-     * This function goes through all characters until it reaches an invalid ident character or the
-     * end of the query. It returns the position of the last character of the ident.
-     *
-     * @param {ParserState} parserState
-     *
-     * @return {integer}
+     * @param {string} lit - string, without quotes, representing quoted string
+     * @returns {QueryElement}
      */
-    function getIdentEndPosition(parserState) {
-        const start = parserState.pos;
-        let end = parserState.pos;
-        let foundExclamation = -1;
-        while (parserState.pos < parserState.length) {
-            const c = parserState.userQuery[parserState.pos];
-            if (!isIdentCharacter(c)) {
-                if (c === "!") {
-                    if (foundExclamation !== -1) {
-                        throw ["Cannot have more than one ", "!", " in an ident"];
-                    } else if (parserState.pos + 1 < parserState.length &&
-                        isIdentCharacter(parserState.userQuery[parserState.pos + 1])
-                    ) {
-                        throw ["Unexpected ", "!", ": it can only be at the end of an ident"];
-                    }
-                    foundExclamation = parserState.pos;
-                } else if (isErrorCharacter(c)) {
-                    throw ["Unexpected ", c];
-                } else if (isPathSeparator(c)) {
-                    if (c === ":") {
-                        if (!isPathStart(parserState)) {
-                            break;
-                        }
-                        // Skip current ":".
-                        parserState.pos += 1;
-                    } else {
-                        while (parserState.pos + 1 < parserState.length) {
-                            const next_c = parserState.userQuery[parserState.pos + 1];
-                            if (!isWhitespace(next_c)) {
-                                break;
-                            }
-                            parserState.pos += 1;
-                        }
-                    }
-                    if (foundExclamation !== -1) {
-                        if (foundExclamation !== start &&
-                            isIdentCharacter(parserState.userQuery[foundExclamation - 1])
-                        ) {
-                            throw ["Cannot have associated items in macros"];
-                        } else {
-                            // while the never type has no associated macros, we still
-                            // can parse a path like that
-                            foundExclamation = -1;
-                        }
-                    }
-                } else if (
-                    c === "[" ||
-                    c === "=" ||
-                    isStopCharacter(c) ||
-                    isSpecialStartCharacter(c) ||
-                    isSeparatorCharacter(c)
-                ) {
-                    break;
-                } else {
-                    throw ["Unexpected ", c];
-                }
-            }
-            parserState.pos += 1;
-            end = parserState.pos;
+    function makeAstFromLit(lit) {
+        if (lit === "") {
+            throw ["Cannot have empty string element"];
         }
-        // if start == end - 1, we got the never type
-        if (foundExclamation !== -1 &&
-            foundExclamation !== start &&
-            isIdentCharacter(parserState.userQuery[foundExclamation - 1])
-        ) {
-            if (parserState.typeFilter === null) {
-                parserState.typeFilter = "macro";
-            } else if (parserState.typeFilter !== "macro") {
-                throw [
-                    "Invalid search type: macro ",
-                    "!",
-                    " and ",
-                    parserState.typeFilter,
-                    " both specified",
-                ];
-            }
-            end = foundExclamation;
+        const syn = /^[a-zA-Z0-9_]+(?:(?:::|\s+)[a-zA-Z0-9_]+)*/;
+        const match = syn.exec(lit);
+        let k = match === null ? 0 : match[0].length;
+        if (k !== lit.length) {
+            throw ["Unexpected ", lit[k], " in a string element"];
         }
-        return end;
-    }
-
-    /**
-     * @param {ParsedQuery} query
-     * @param {ParserState} parserState
-     * @param {Array<QueryElement>} elems - This is where the new {QueryElement} will be added.
-     * @param {boolean} isInGenerics
-     */
-    function getNextElem(query, parserState, elems, isInGenerics) {
-        const generics = [];
-
-        skipWhitespace(parserState);
-        let start = parserState.pos;
-        let end;
-        if (parserState.userQuery[parserState.pos] === "[") {
-            parserState.pos += 1;
-            getItemsBefore(query, parserState, generics, "]");
-            const typeFilter = parserState.typeFilter;
-            const isInBinding = parserState.isInBinding;
-            if (typeFilter !== null && typeFilter !== "primitive") {
-                throw [
-                    "Invalid search type: primitive ",
-                    "[]",
-                    " and ",
-                    typeFilter,
-                    " both specified",
-                ];
-            }
-            parserState.typeFilter = null;
-            parserState.isInBinding = null;
-            parserState.totalElems += 1;
-            if (isInGenerics) {
-                parserState.genericsElems += 1;
-            }
-            for (const gen of generics) {
-                if (gen.bindingName !== null) {
-                    throw ["Type parameter ", "=", " cannot be within slice ", "[]"];
-                }
-            }
-            elems.push({
-                name: "[]",
-                id: null,
-                fullPath: ["[]"],
-                pathWithoutLast: [],
-                pathLast: "[]",
-                generics,
-                typeFilter: "primitive",
-                bindingName: isInBinding,
-                bindings: new Map(),
-            });
-        } else {
-            const isStringElem = parserState.userQuery[start] === "\"";
-            // We handle the strings on their own mostly to make code easier to follow.
-            if (isStringElem) {
-                start += 1;
-                getStringElem(query, parserState, isInGenerics);
-                end = parserState.pos - 1;
-            } else {
-                end = getIdentEndPosition(parserState);
-            }
-            if (parserState.pos < parserState.length &&
-                parserState.userQuery[parserState.pos] === "<"
-            ) {
-                if (start >= end) {
-                    throw ["Found generics without a path"];
-                }
-                parserState.pos += 1;
-                getItemsBefore(query, parserState, generics, ">");
-            }
-            if (isStringElem) {
-                skipWhitespace(parserState);
-            }
-            if (start >= end && generics.length === 0) {
-                return;
-            }
-            if (parserState.userQuery[parserState.pos] === "=") {
-                if (parserState.isInBinding) {
-                    throw ["Cannot write ", "=", " twice in a binding"];
-                }
-                if (!isInGenerics) {
-                    throw ["Type parameter ", "=", " must be within generics list"];
-                }
-                const name = parserState.userQuery.slice(start, end).trim();
-                if (name === "!") {
-                    throw ["Type parameter ", "=", " key cannot be ", "!", " never type"];
-                }
-                if (name.includes("!")) {
-                    throw ["Type parameter ", "=", " key cannot be ", "!", " macro"];
-                }
-                if (name.includes("::")) {
-                    throw ["Type parameter ", "=", " key cannot contain ", "::", " path"];
-                }
-                if (name.includes(":")) {
-                    throw ["Type parameter ", "=", " key cannot contain ", ":", " type"];
-                }
-                parserState.isInBinding = { name, generics };
-            } else {
-                elems.push(
-                    createQueryElement(
-                        query,
-                        parserState,
-                        parserState.userQuery.slice(start, end),
-                        generics,
-                        isInGenerics
-                    )
-                );
-            }
-        }
-    }
-
-    /**
-     * This function parses the next query element until it finds `endChar`, calling `getNextElem`
-     * to collect each element.
-     *
-     * If there is no `endChar`, this function will implicitly stop at the end without raising an
-     * error.
-     *
-     * @param {ParsedQuery} query
-     * @param {ParserState} parserState
-     * @param {Array<QueryElement>} elems - This is where the new {QueryElement} will be added.
-     * @param {string} endChar            - This function will stop when it'll encounter this
-     *                                      character.
-     */
-    function getItemsBefore(query, parserState, elems, endChar) {
-        let foundStopChar = true;
-        let start = parserState.pos;
-
-        // If this is a generic, keep the outer item's type filter around.
-        const oldTypeFilter = parserState.typeFilter;
-        parserState.typeFilter = null;
-        const oldIsInBinding = parserState.isInBinding;
-        parserState.isInBinding = null;
-
-        let extra = "";
-        if (endChar === ">") {
-            extra = "<";
-        } else if (endChar === "]") {
-            extra = "[";
-        } else if (endChar === "") {
-            extra = "->";
-        } else {
-            extra = endChar;
-        }
-
-        while (parserState.pos < parserState.length) {
-            const c = parserState.userQuery[parserState.pos];
-            if (c === endChar) {
-                if (parserState.isInBinding) {
-                    throw ["Unexpected ", endChar, " after ", "="];
-                }
-                break;
-            } else if (isSeparatorCharacter(c)) {
-                parserState.pos += 1;
-                foundStopChar = true;
-                continue;
-            } else if (c === ":" && isPathStart(parserState)) {
-                throw ["Unexpected ", "::", ": paths cannot start with ", "::"];
-            }  else if (c === ":") {
-                if (parserState.typeFilter !== null) {
-                    throw ["Unexpected ", ":"];
-                }
-                if (elems.length === 0) {
-                    throw ["Expected type filter before ", ":"];
-                } else if (query.literalSearch) {
-                    throw ["Cannot use quotes on type filter"];
-                }
-                // The type filter doesn't count as an element since it's a modifier.
-                const typeFilterElem = elems.pop();
-                checkExtraTypeFilterCharacters(start, parserState);
-                parserState.typeFilter = typeFilterElem.name;
-                parserState.pos += 1;
-                parserState.totalElems -= 1;
-                query.literalSearch = false;
-                foundStopChar = true;
-                continue;
-            } else if (isEndCharacter(c)) {
-                throw ["Unexpected ", c, " after ", extra];
-            }
-            if (!foundStopChar) {
-                let extra = [];
-                if (isLastElemGeneric(query.elems, parserState)) {
-                    extra = [" after ", ">"];
-                } else if (prevIs(parserState, "\"")) {
-                    throw ["Cannot have more than one element if you use quotes"];
-                }
-                if (endChar !== "") {
-                    throw [
-                        "Expected ",
-                        ",",
-                        ", ",
-                        "=",
-                        ", or ",
-                        endChar,
-                        ...extra,
-                        ", found ",
-                        c,
-                    ];
-                }
-                throw [
-                    "Expected ",
-                    ",",
-                    " or ",
-                    "=",
-                    ...extra,
-                    ", found ",
-                    c,
-                ];
-            }
-            const posBefore = parserState.pos;
-            start = parserState.pos;
-            getNextElem(query, parserState, elems, endChar !== "");
-            if (endChar !== "" && parserState.pos >= parserState.length) {
-                throw ["Unclosed ", extra];
-            }
-            // This case can be encountered if `getNextElem` encountered a "stop character" right
-            // from the start. For example if you have `,,` or `<>`. In this case, we simply move up
-            // the current position to continue the parsing.
-            if (posBefore === parserState.pos) {
-                parserState.pos += 1;
-            }
-            foundStopChar = false;
-        }
-        if (parserState.pos >= parserState.length && endChar !== "") {
-            throw ["Unclosed ", extra];
-        }
-        // We are either at the end of the string or on the `endChar` character, let's move forward
-        // in any case.
-        parserState.pos += 1;
-
-        parserState.typeFilter = oldTypeFilter;
-        parserState.isInBinding = oldIsInBinding;
-    }
-
-    /**
-     * Checks that the type filter doesn't have unwanted characters like `<>` (which are ignored
-     * if empty).
-     *
-     * @param {ParserState} parserState
-     */
-    function checkExtraTypeFilterCharacters(start, parserState) {
-        const query = parserState.userQuery.slice(start, parserState.pos).trim();
-
-        for (const c in query) {
-            if (!isIdentCharacter(query[c])) {
-                throw [
-                    "Unexpected ",
-                    query[c],
-                    " in type filter (before ",
-                    ":",
-                    ")",
-                ];
-            }
-        }
-    }
-
-    /**
-     * Parses the provided `query` input to fill `parserState`. If it encounters an error while
-     * parsing `query`, it'll throw an error.
-     *
-     * @param {ParsedQuery} query
-     * @param {ParserState} parserState
-     */
-    function parseInput(query, parserState) {
-        let foundStopChar = true;
-        let start = parserState.pos;
-
-        while (parserState.pos < parserState.length) {
-            const c = parserState.userQuery[parserState.pos];
-            if (isStopCharacter(c)) {
-                foundStopChar = true;
-                if (isSeparatorCharacter(c)) {
-                    parserState.pos += 1;
-                    continue;
-                } else if (c === "-" || c === ">") {
-                    if (isReturnArrow(parserState)) {
-                        break;
-                    }
-                    throw ["Unexpected ", c, " (did you mean ", "->", "?)"];
-                }
-                throw ["Unexpected ", c];
-            } else if (c === ":" && !isPathStart(parserState)) {
-                if (parserState.typeFilter !== null) {
-                    throw [
-                        "Unexpected ",
-                        ":",
-                        " (expected path after type filter ",
-                        parserState.typeFilter + ":",
-                        ")",
-                    ];
-                } else if (query.elems.length === 0) {
-                    throw ["Expected type filter before ", ":"];
-                } else if (query.literalSearch) {
-                    throw ["Cannot use quotes on type filter"];
-                }
-                // The type filter doesn't count as an element since it's a modifier.
-                const typeFilterElem = query.elems.pop();
-                checkExtraTypeFilterCharacters(start, parserState);
-                parserState.typeFilter = typeFilterElem.name;
-                parserState.pos += 1;
-                parserState.totalElems -= 1;
-                query.literalSearch = false;
-                foundStopChar = true;
-                continue;
-            } else if (isWhitespace(c)) {
-                skipWhitespace(parserState);
-                continue;
-            }
-            if (!foundStopChar) {
-                let extra = "";
-                if (isLastElemGeneric(query.elems, parserState)) {
-                    extra = [" after ", ">"];
-                } else if (prevIs(parserState, "\"")) {
-                    throw ["Cannot have more than one element if you use quotes"];
-                }
-                if (parserState.typeFilter !== null) {
-                    throw [
-                        "Expected ",
-                        ",",
-                        " or ",
-                        "->",
-                        ...extra,
-                        ", found ",
-                        c,
-                    ];
-                }
-                throw [
-                    "Expected ",
-                    ",",
-                    ", ",
-                    ":",
-                    " or ",
-                    "->",
-                    ...extra,
-                    ", found ",
-                    c,
-                ];
-            }
-            const before = query.elems.length;
-            start = parserState.pos;
-            getNextElem(query, parserState, query.elems, false);
-            if (query.elems.length === before) {
-                // Nothing was added, weird... Let's increase the position to not remain stuck.
-                parserState.pos += 1;
-            }
-            foundStopChar = false;
-        }
-        if (parserState.typeFilter !== null) {
-            throw [
-                "Unexpected ",
-                ":",
-                " (expected path after type filter ",
-                parserState.typeFilter + ":",
-                ")",
-            ];
-        }
-        while (parserState.pos < parserState.length) {
-            if (isReturnArrow(parserState)) {
-                parserState.pos += 2;
-                skipWhitespace(parserState);
-                // Get returned elements.
-                getItemsBefore(query, parserState, query.returned, "");
-                // Nothing can come afterward!
-                if (query.returned.length === 0) {
-                    throw ["Expected at least one item after ", "->"];
-                }
-                break;
-            } else {
-                parserState.pos += 1;
-            }
-        }
+        const fullPath = lit.split(/(?:::|\s+)/);
+        const [...pathWithoutLast] = fullPath;
+        const pathLast = pathWithoutLast.pop();
+        return {
+            name: lit,
+            id: null,
+            fullPath,
+            pathLast,
+            generics: null,
+            bindings: new Map(),
+            typeFilter: null,
+        };
     }
 
     /**
@@ -1052,6 +633,161 @@ function initSearch(rawSearchIndex) {
             proposeCorrectionFrom: null,
             proposeCorrectionTo: null,
         };
+    }
+
+    /**
+     * Parses the query.
+     *
+     * The supported syntax by this parser is given in the rustdoc book chapter
+     * /src/doc/rustdoc/src/read-documentation/search.md
+     *
+     * When adding new things to the parser, add them there, too!
+     *
+     * @param  {string} val     - The user query
+     *
+     * @return {ParsedQuery}    - The parsed query
+     */
+    function parseQuery(userQuery) {
+        function postProcessElem(elem) {
+            query.totalElems += 1;
+            if (elem.generics === null) {
+                elem.generics = [];
+            }
+            if (elem.name === "!" && elem.generics.length >= 1) {
+                throw ["Never type ", "!", " does not accept generic parameters"];
+            }
+            if (elem.name === "!" || elem.name === "[]") {
+                if (elem.typeFilter !== null && elem.typeFilter !== "primitive") {
+                    throw [
+                        "Invalid search type: primitive ",
+                        elem.name,
+                        " and ",
+                        elem.typeFilter,
+                        " both specified",
+                    ];
+                }
+                elem.name = elem.name === "!" ? "never" : elem.name;
+                elem.pathLast = elem.name;
+                elem.fullPath[elem.fullPath.length - 1] = elem.name;
+                elem.typeFilter = "primitive";
+            } else if (elem.pathLast.endsWith("!") && elem.pathLast !== "!") {
+                elem.name = elem.name.substring(0, elem.name.length - 1);
+                elem.pathLast = elem.pathLast.substring(0, elem.pathLast.length - 1);
+                elem.fullPath[elem.fullPath.length - 1] = elem.pathLast;
+                if (elem.typeFilter !== null && elem.typeFilter !== "macro") {
+                    throw [
+                        "Invalid search type: macro ",
+                        "!",
+                        " and ",
+                        elem.typeFilter,
+                        " both specified",
+                    ];
+                }
+                elem.typeFilter = "macro";
+            }
+            elem.fullPath = elem.fullPath.map((item, index) => {
+                if (item === "!") {
+                    if (index !== 0) {
+                        throw ["Never type ", "!", " is not associated item"];
+                    }
+                    return "never";
+                }
+                if (item.indexOf("!") !== -1) {
+                    if (item.endsWith("!") && elem.typeFilter !== "macro") {
+                        throw ["Cannot have associated items in macros"];
+                    } else {
+                        throw ["Unexpected ", "!", ": it can only be at the end of an ident"];
+                    }
+                }
+                return item;
+            });
+            elem.pathWithoutLast = [...elem.fullPath];
+            elem.pathWithoutLast.pop();
+            if (elem.typeFilter !== null) {
+                let typeFilter = elem.typeFilter;
+                if (typeFilter === "const") {
+                    typeFilter = "constant";
+                }
+                if (typeFilter === "=") {
+                    throw ["Type parameter ", "=", " must be within generics list"];
+                }
+                elem.typeFilter = itemTypeFromName(typeFilter);
+            } else {
+                elem.typeFilter = NO_TYPE_FILTER;
+            }
+            for (const elem2 of elem.generics) {
+                postProcessElem(elem2);
+            }
+            for (const constraints of elem.bindings.values()) {
+                for (const constraint of constraints) {
+                    postProcessElem(constraint);
+                }
+            }
+        }
+        userQuery = userQuery.trim();
+        let query = newParsedQuery(userQuery);
+
+        try {
+            const lexer = newLexer(query.userQuery);
+            query.elems = parseElements(lexer, 0, false);
+            let [opType, op] = nextTokenFromLexer(lexer);
+            if (opType === "op" && op === "->") {
+                query.returned = parseElements(lexer, 0, false);
+                [opType, op] = nextTokenFromLexer(lexer);
+                if (query.returned.length === 0) {
+                    throw ["Expected at least one item after ", "->"];
+                }
+                if (lexer.literalSearch && query.elems.length !== 0) {
+                    throw ["Cannot have more than one element if you use quotes"];
+                }
+            } else if (lexer.literalSearch) {
+                if (query.elems.length > 1) {
+                    throw ["Cannot have more than one element if you use quotes"];
+                }
+                if (opType === "lit" || opType === "ident" ||
+                    (opType === "op" && (op === "," || op === "<"))) {
+                    throw ["Cannot have more than one element if you use quotes"];
+                }
+                if (opType !== "eof") {
+                    throw [
+                        "Expected eof, found token ",
+                        op,
+                        " (quoted literal searches only support paths)",
+                    ];
+                }
+            }
+            query.literalSearch = lexer.literalSearch;
+            if (opType !== "eof") {
+                if (opType === "op" && (op === "-" || op === ">")) {
+                    throw ["Unexpected ", op, " (did you mean ", "->", "?)"];
+                }
+                if (opType === "op" && op === "\"") {
+                    throw ["Unclosed ", "\""];
+                }
+                throw ["Unexpected ", op];
+            }
+            for (const elem of query.elems) {
+                postProcessElem(elem);
+            }
+            for (const elem of query.returned) {
+                postProcessElem(elem);
+            }
+        } catch (err) {
+            query = newParsedQuery(userQuery);
+            query.error = err;
+            query.elems = [];
+            query.returned = [];
+            query.totalElems = 0;
+            return query;
+        }
+
+        if (!query.literalSearch) {
+            // If there is more than one element in the query, we switch to literalSearch in any
+            // case.
+            query.literalSearch = query.totalElems > 1;
+        }
+        query.foundElems = query.elems.length + query.returned.length;
+        return query;
     }
 
     /**
@@ -1086,75 +822,6 @@ function initSearch(rawSearchIndex) {
             return elem.value;
         }
         return null;
-    }
-
-    /**
-     * Parses the query.
-     *
-     * The supported syntax by this parser is given in the rustdoc book chapter
-     * /src/doc/rustdoc/src/read-documentation/search.md
-     *
-     * When adding new things to the parser, add them there, too!
-     *
-     * @param  {string} val     - The user query
-     *
-     * @return {ParsedQuery}    - The parsed query
-     */
-    function parseQuery(userQuery) {
-        function convertTypeFilterOnElem(elem) {
-            if (elem.typeFilter !== null) {
-                let typeFilter = elem.typeFilter;
-                if (typeFilter === "const") {
-                    typeFilter = "constant";
-                }
-                elem.typeFilter = itemTypeFromName(typeFilter);
-            } else {
-                elem.typeFilter = NO_TYPE_FILTER;
-            }
-            for (const elem2 of elem.generics) {
-                convertTypeFilterOnElem(elem2);
-            }
-            for (const constraints of elem.bindings.values()) {
-                for (const constraint of constraints) {
-                    convertTypeFilterOnElem(constraint);
-                }
-            }
-        }
-        userQuery = userQuery.trim();
-        const parserState = {
-            length: userQuery.length,
-            pos: 0,
-            // Total number of elements (includes generics).
-            totalElems: 0,
-            genericsElems: 0,
-            typeFilter: null,
-            isInBinding: null,
-            userQuery: userQuery.toLowerCase(),
-        };
-        let query = newParsedQuery(userQuery);
-
-        try {
-            parseInput(query, parserState);
-            for (const elem of query.elems) {
-                convertTypeFilterOnElem(elem);
-            }
-            for (const elem of query.returned) {
-                convertTypeFilterOnElem(elem);
-            }
-        } catch (err) {
-            query = newParsedQuery(userQuery);
-            query.error = err;
-            return query;
-        }
-
-        if (!query.literalSearch) {
-            // If there is more than one element in the query, we switch to literalSearch in any
-            // case.
-            query.literalSearch = parserState.totalElems > 1;
-        }
-        query.foundElems = query.elems.length + query.returned.length;
-        query.totalElems = parserState.totalElems;
-        return query;
     }
 
     /**

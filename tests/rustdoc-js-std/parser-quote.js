@@ -17,19 +17,12 @@ const PARSED = [
     },
     {
         query: '"p",',
-        elems: [{
-            name: "p",
-            fullPath: ["p"],
-            pathWithoutLast: [],
-            pathLast: "p",
-            generics: [],
-            typeFilter: -1,
-        }],
-        foundElems: 1,
+        elems: [],
+        foundElems: 0,
         original: '"p",',
         returned: [],
         userQuery: '"p",',
-        error: null,
+        error: "Cannot have more than one element if you use quotes",
     },
     {
         query: '"p" -> a',
@@ -47,7 +40,7 @@ const PARSED = [
         original: '"a" -> "p"',
         returned: [],
         userQuery: '"a" -> "p"',
-        error: "Cannot have more than one literal search element",
+        error: "Cannot have more than one element if you use quotes",
     },
     {
         query: '->"-"',

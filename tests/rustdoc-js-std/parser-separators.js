@@ -5,7 +5,7 @@ const PARSED = [
         query: 'aaaaaa	b',
         elems: [
             {
-                name: 'aaaaaa\tb',
+                name: 'aaaaaa b',
                 fullPath: ['aaaaaa', 'b'],
                 pathWithoutLast: ['aaaaaa'],
                 pathLast: 'b',
@@ -93,7 +93,7 @@ const PARSED = [
         query: 'a\tb',
         elems: [
             {
-                name: 'a\tb',
+                name: 'a b',
                 fullPath: ['a', 'b'],
                 pathWithoutLast: ['a'],
                 pathLast: 'b',
@@ -176,7 +176,7 @@ const PARSED = [
                 pathLast: 'a',
                 generics: [
                     {
-                        name: 'b\tc',
+                        name: 'b c',
                         fullPath: ['b', 'c'],
                         pathWithoutLast: ['b'],
                         pathLast: 'c',

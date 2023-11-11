@@ -46,7 +46,7 @@ const EXPECTED = [
         ],
     },
     {
-        'query': '"ExtraCreditStructMulti"<ExtraCreditInnerMulti, ExtraCreditInnerMulti>',
+        'query': 'ExtraCreditStructMulti<ExtraCreditInnerMulti, ExtraCreditInnerMulti>',
         'in_args': [
             { 'path': 'generics', 'name': 'extracreditlabhomework' },
         ],

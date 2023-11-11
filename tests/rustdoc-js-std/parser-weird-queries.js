@@ -24,7 +24,7 @@ const PARSED = [
         query: 'a   b',
         elems: [
             {
-                name: "a   b",
+                name: "a b",
                 fullPath: ["a", "b"],
                 pathWithoutLast: ["a"],
                 pathLast: "b",
@@ -77,7 +77,7 @@ const PARSED = [
         original: ",,,,",
         returned: [],
         userQuery: ",,,,",
-        error: null,
+        error: "Unexpected `,`",
     },
     {
         query: 'mod    :',

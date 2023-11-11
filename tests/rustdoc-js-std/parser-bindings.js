@@ -172,7 +172,7 @@ const PARSED = [
         original: 'A<B=C=>',
         returned: [],
         userQuery: 'a<b=c=>',
-        error: "Cannot write `=` twice in a binding",
+        error: "Expected `>`, found `=`",
     },
     {
         query: 'A<B=>',
@@ -181,7 +181,7 @@ const PARSED = [
         original: 'A<B=>',
         returned: [],
         userQuery: 'a<b=>',
-        error: "Unexpected `>` after `=`",
+        error: "Expected `>`, found `=`",
     },
     {
         query: 'B=C',
@@ -199,7 +199,7 @@ const PARSED = [
         original: '[B=C]',
         returned: [],
         userQuery: '[b=c]',
-        error: "Type parameter `=` cannot be within slice `[]`",
+        error: "Type parameter `=` must be within generics list",
     },
     {
         query: 'A<B<X>=C>',

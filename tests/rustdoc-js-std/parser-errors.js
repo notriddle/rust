@@ -24,7 +24,7 @@ const PARSED = [
         original: "a<\"P\">",
         returned: [],
         userQuery: "a<\"p\">",
-        error: "Unexpected `\"` in generics",
+        error: "Quoted literal searches cannot be used with generics",
     },
     {
         query: '"P" "P"',
@@ -42,7 +42,7 @@ const PARSED = [
         original: "\"P\",\"P\"",
         returned: [],
         userQuery: "\"p\",\"p\"",
-        error: "Cannot have more than one literal search element",
+        error: "Cannot have more than one element if you use quotes",
     },
     {
         query: "P,\"P\"",
@@ -51,7 +51,7 @@ const PARSED = [
         original: "P,\"P\"",
         returned: [],
         userQuery: "p,\"p\"",
-        error: "Cannot use literal search when there is more than one element",
+        error: "Cannot have more than one element if you use quotes",
     },
     {
         query: '"p" p',
@@ -123,7 +123,7 @@ const PARSED = [
         original: "::a::b",
         returned: [],
         userQuery: "::a::b",
-        error: "Paths cannot start with `::`",
+        error: "Unexpected `::`: paths cannot start with `::`",
     },
     {
         query: " ::a::b",
@@ -132,7 +132,7 @@ const PARSED = [
         original: "::a::b",
         returned: [],
         userQuery: "::a::b",
-        error: "Paths cannot start with `::`",
+        error: "Unexpected `::`: paths cannot start with `::`",
     },
     {
         query: "a::::b",
@@ -141,7 +141,7 @@ const PARSED = [
         original: "a::::b",
         returned: [],
         userQuery: "a::::b",
-        error: "Unexpected `::::`",
+        error: "Unexpected `:::`",
     },
     {
         query: "a::b::",
@@ -168,7 +168,16 @@ const PARSED = [
         original: "a,b:",
         returned: [],
         userQuery: "a,b:",
-        error: "Unexpected `:` (expected path after type filter `b:`)",
+        error: "Unexpected `:` (did you mean `struct:b`?)",
+    },
+    {
+        query: "a,enum:",
+        elems: [],
+        foundElems: 0,
+        original: "a,enum:",
+        returned: [],
+        userQuery: "a,enum:",
+        error: "Unexpected `:` (expected path after type filter `enum:`)",
     },
     {
         query: "a (b:",
@@ -186,7 +195,7 @@ const PARSED = [
         original: "_:",
         returned: [],
         userQuery: "_:",
-        error: "Unexpected `:` (expected path after type filter `_:`)",
+        error: "Unexpected `:` (did you mean `struct:_`?)",
     },
     {
         query: "_:a",
@@ -249,7 +258,7 @@ const PARSED = [
         original: '"p",<a>',
         returned: [],
         userQuery: '"p",<a>',
-        error: "Found generics without a path",
+        error: "Cannot have more than one element if you use quotes",
     },
     {
         query: '"p" a<a>',
@@ -285,7 +294,7 @@ const PARSED = [
         original: 'aaaaa<>b',
         returned: [],
         userQuery: 'aaaaa<>b',
-        error: 'Expected `,`, `:` or `->` after `>`, found `b`',
+        error: 'Generic `<>` must be at end of path',
     },
     {
         query: "fn:aaaaa<>b",
@@ -294,7 +303,7 @@ const PARSED = [
         original: 'fn:aaaaa<>b',
         returned: [],
         userQuery: 'fn:aaaaa<>b',
-        error: 'Expected `,`, `:` or `->` after `>`, found `b`',
+        error: 'Generic `<>` must be at end of path',
     },
     {
         query: "->a<>b",
@@ -303,7 +312,7 @@ const PARSED = [
         original: '->a<>b',
         returned: [],
         userQuery: '->a<>b',
-        error: 'Expected `,` or `=` after `>`, found `b`',
+        error: 'Generic `<>` must be at end of path',
     },
     {
         query: "a<->",
@@ -312,25 +321,41 @@ const PARSED = [
         original: 'a<->',
         returned: [],
         userQuery: 'a<->',
-        error: 'Unexpected `-` after `<`',
+        error: 'Expected `>`, found `->`',
     },
     {
         query: "a:: a",
-        elems: [],
-        foundElems: 0,
-        original: 'a:: a',
+        elems: [
+            {
+                name: "a::a",
+                fullPath: ["a", "a"],
+                pathWithoutLast: ["a"],
+                pathLast: "a",
+                generics: [],
+            },
+        ],
+        foundElems: 1,
+        original: "a:: a",
         returned: [],
-        userQuery: 'a:: a',
-        error: 'Unexpected `:: `',
+        userQuery: "a:: a",
+        error: null,
     },
     {
         query: "a ::a",
-        elems: [],
-        foundElems: 0,
+        elems: [
+            {
+                name: "a::a",
+                fullPath: ["a", "a"],
+                pathWithoutLast: ["a"],
+                pathLast: "a",
+                generics: [],
+            },
+        ],
+        foundElems: 1,
         original: 'a ::a',
         returned: [],
         userQuery: 'a ::a',
-        error: 'Unexpected ` ::`',
+        error: null,
     },
     {
         query: "a<a>:",
@@ -339,7 +364,7 @@ const PARSED = [
         original: "a<a>:",
         returned: [],
         userQuery: "a<a>:",
-        error: 'Unexpected `<` in type filter (before `:`)',
+        error: 'Unexpected `:` (did you mean `struct:a<a>`?)',
     },
     {
         query: "a<>:",
@@ -348,7 +373,7 @@ const PARSED = [
         original: "a<>:",
         returned: [],
         userQuery: "a<>:",
-        error: 'Unexpected `<` in type filter (before `:`)',
+        error: 'Unexpected `:` (did you mean `struct:a<>`?)',
     },
     {
         query: "a,:",
@@ -357,7 +382,7 @@ const PARSED = [
         original: "a,:",
         returned: [],
         userQuery: "a,:",
-        error: 'Unexpected `,` in type filter (before `:`)',
+        error: 'Expected type filter before `:`',
     },
     {
         query: "  a<>  :",
@@ -366,7 +391,7 @@ const PARSED = [
         original: "a<>  :",
         returned: [],
         userQuery: "a<>  :",
-        error: 'Unexpected `<` in type filter (before `:`)',
+        error: 'Unexpected `:` (did you mean `struct:a<>`?)',
     },
     {
         query: "mod : :",
@@ -375,7 +400,7 @@ const PARSED = [
         original: "mod : :",
         returned: [],
         userQuery: "mod : :",
-        error: 'Unexpected `:` (expected path after type filter `mod:`)',
+        error: 'Expected type filter before `:`',
     },
     {
         query: "mod: :",
@@ -384,7 +409,7 @@ const PARSED = [
         original: "mod: :",
         returned: [],
         userQuery: "mod: :",
-        error: 'Unexpected `:` (expected path after type filter `mod:`)',
+        error: 'Expected type filter before `:`',
     },
     {
         query: "a!a",
@@ -402,7 +427,7 @@ const PARSED = [
         original: "a!!",
         returned: [],
         userQuery: "a!!",
-        error: 'Cannot have more than one `!` in an ident',
+        error: 'Unexpected `!`: it can only be at the end of an ident',
     },
     {
         query: "mod:a!",
@@ -420,7 +445,7 @@ const PARSED = [
         original: "mod:!",
         returned: [],
         userQuery: "mod:!",
-        error: 'Invalid search type: primitive never type `!` and `mod` both specified',
+        error: 'Invalid search type: primitive `!` and `mod` both specified',
     },
     {
         query: "a!::a",

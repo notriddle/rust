@@ -210,7 +210,7 @@ const PARSED = [
         original: "[>",
         returned: [],
         userQuery: "[>",
-        error: "Unexpected `>` after `[`",
+        error: "Expected `]`, found `>`",
     },
     {
         query: '[<',
@@ -228,7 +228,7 @@ const PARSED = [
         original: "[a>",
         returned: [],
         userQuery: "[a>",
-        error: "Unexpected `>` after `[`",
+        error: "Expected `]`, found `>`",
     },
     {
         query: '[a<',

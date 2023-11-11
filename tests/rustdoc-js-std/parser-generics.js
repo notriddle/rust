@@ -36,29 +36,12 @@ const PARSED = [
     },
     {
         query: '"p"<a>',
-        elems: [
-            {
-                name: "p",
-                fullPath: ["p"],
-                pathWithoutLast: [],
-                pathLast: "p",
-                generics: [
-                    {
-                        name: "a",
-                        fullPath: ["a"],
-                        pathWithoutLast: [],
-                        pathLast: "a",
-                        generics: [],
-                    },
-                ],
-                typeFilter: -1,
-            },
-        ],
-        foundElems: 1,
+        elems: [],
+        foundElems: 0,
         original: '"p"<a>',
         returned: [],
         userQuery: '"p"<a>',
-        error: null,
+        error: "Cannot have more than one element if you use quotes",
     },
     {
         query: 'p<u<x>>',

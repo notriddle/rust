@@ -8,6 +8,16 @@ function initSearch(searchIndex){}
 
 /**
  * @typedef {{
+ *     prefixPower: integer?,
+ *     infixPower: [integer, integer]?,
+ *     postfixPower: integer?,
+ *     cons: ([QueryElement], [QueryElement]?) -> [QueryElement],
+ * }}
+ */
+let ParserSyntaxOperator;
+
+/**
+ * @typedef {{
  *     name: string,
  *     id: integer|null,
  *     fullPath: Array<string>,

@@ -149,6 +149,6 @@ const PARSED = [
         original: "a!::b!",
         returned: [],
         userQuery: "a!::b!",
-        error: "Cannot have associated items in macros",
+        error: "Unexpected `!`: it can only be at the end of an ident",
     },
 ];
