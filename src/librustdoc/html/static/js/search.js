@@ -1258,11 +1258,6 @@ if (parserState.userQuery[parserState.pos] === "[") {
          * @returns {[ResultObject]}
          */
         function sortResults(results, isType, preferredCrate) {
-            // if there are no results then return to default and fail
-            if (results.size === 0) {
-                return [];
-            }
-
             const userQuery = parsedQuery.userQuery;
             const result_list = [];
             for (const result of results.values()) {
