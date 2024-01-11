@@ -1,5 +1,6 @@
-/* global addClass, getNakedUrl, getSettingValue */
-/* global onEachLazy, removeClass, searchState, browserSupportsHistoryApi, exports */
+// ignore-tidy-filelength
+/* global addClass, getNakedUrl, getSettingValue, RUSTDOC_SEARCH_DESC, getVar */
+/* global onEachLazy, removeClass, searchState, browserSupportsHistoryApi, exports, module */
 
 "use strict";
 
@@ -316,6 +317,19 @@ function initSearch(rawSearchIndex) {
             throw ["Unknown type filter ", typename];
         }
         return index;
+    }
+
+    // Script tags for loading descriptions are stashed here.
+    const DESC_LOADERS = new Map();
+    function loadDescForCrate(crateName) {
+        if (!RUSTDOC_SEARCH_DESC.has(crateName) && !DESC_LOADERS.has(crateName)) {
+            // Load descriptions for crate if it appears here
+            // This is also done for regular items in sortResults
+            const loader = document.createElement("script");
+            loader.src = `${ROOT_PATH}search.desc/${crateName}${getVar("resource-suffix")}.js`;
+            document.documentElement.appendChild(loader);
+            DESC_LOADERS.set(crateName, loader);
+        }
     }
 
     /**
@@ -1206,7 +1220,7 @@ if (parserState.userQuery[parserState.pos] === "[") {
      * @param  {Object} [filterCrates]   - Crate to search in if defined
      * @param  {Object} [currentCrate]   - Current crate, to rank results from this crate higher
      *
-     * @return {ResultsTable}
+     * @return {ResultsTable|null}
      */
     function execQuery(parsedQuery, filterCrates, currentCrate) {
         const results_others = new Map(), results_in_args = new Map(),
@@ -1232,6 +1246,10 @@ if (parserState.userQuery[parserState.pos] === "[") {
                     obj.fullPath = obj.displayPath + obj.name;
                     // To be sure than it some items aren't considered as duplicate.
                     obj.fullPath += "|" + obj.ty;
+
+                    if (RUSTDOC_SEARCH_DESC.has(obj.crate)) {
+                        obj.desc = RUSTDOC_SEARCH_DESC.get(obj.crate)[obj.descIdx];
+                    }
 
                     if (duplicates.has(obj.fullPath)) {
                         continue;
@@ -1264,6 +1282,12 @@ if (parserState.userQuery[parserState.pos] === "[") {
                 result.item = searchIndex[result.id];
                 result.word = searchIndex[result.id].word;
                 result_list.push(result);
+                loadDescForCrate(result.item.crate);
+            }
+            if (DESC_LOADERS.size > 0) {
+                // Can't sort until the descriptions are loaded.
+                // Still want to return normally so that the result count shows up.
+                return transformResults(result_list);
             }
 
             result_list.sort((aaa, bbb) => {
@@ -1335,8 +1359,8 @@ if (parserState.userQuery[parserState.pos] === "[") {
                 }
 
                 // sort by description (no description goes later)
-                a = (aaa.item.desc === "");
-                b = (bbb.item.desc === "");
+                a = (RUSTDOC_SEARCH_DESC.get(aaa.item.crate)[aaa.item.descIdx] === "");
+                b = (RUSTDOC_SEARCH_DESC.get(bbb.item.crate)[bbb.item.descIdx] === "");
                 if (a !== b) {
                     return a - b;
                 }
@@ -1902,11 +1926,12 @@ if (parserState.userQuery[parserState.pos] === "[") {
         }
 
         function createAliasFromItem(item) {
+            loadDescForCrate(item.crate);
             return {
                 crate: item.crate,
                 name: item.name,
                 path: item.path,
-                desc: item.desc,
+                descIdx: item.descIdx,
                 ty: item.ty,
                 parent: item.parent,
                 type: item.type,
@@ -2422,7 +2447,10 @@ if (parserState.userQuery[parserState.pos] === "[") {
         const extraClass = display ? " active" : "";
 
         const output = document.createElement("div");
-        if (array.length > 0) {
+        if (DESC_LOADERS.size > 0) {
+            output.className = "search-results-loading " + extraClass;
+            output.innerHTML = "<h3 class=\"search-loading\">" + searchState.loadingText + "</h3>";
+        } else if (array.length > 0) {
             output.className = "search-results " + extraClass;
 
             array.forEach(item => {
@@ -2505,8 +2533,9 @@ ${item.displayPath}<span class="${type}">${name}</span>\
      */
     function showResults(results, go_to_first, filterCrates) {
         const search = searchState.outputElement();
-        if (go_to_first || (results.others.length === 1
-            && getSettingValue("go-to-only-result") === "true")
+        // don't go-to-first until we can sort them correctly
+        if ((go_to_first && (results.others.length === 1 || DESC_LOADERS.size === 0)) ||
+            (results.others.length === 1 && getSettingValue("go-to-only-result") === "true")
         ) {
             // Needed to force re-execution of JS when coming back to a page. Let's take this
             // scenario as example:
@@ -2685,7 +2714,9 @@ ${item.displayPath}<span class="${type}">${name}</span>\
 
         // Because searching is incremental by character, only the most
         // recent search query is added to the browser history.
-        updateSearchHistory(buildUrl(query.original, filterCrates));
+        if (!params.go_to_first) {
+            updateSearchHistory(buildUrl(query.original, filterCrates));
+        }
 
         showResults(
             execQuery(query, filterCrates, window.currentCrate),
@@ -3112,7 +3143,8 @@ ${item.displayPath}<span class="${type}">${name}</span>\
                 ty: 3, // == ExternCrate
                 name: crate,
                 path: "",
-                desc: crateCorpus.doc,
+                // Desc loaded from an external file
+                descIdx: 0,
                 parent: undefined,
                 type: null,
                 id: id,
@@ -3135,8 +3167,6 @@ ${item.displayPath}<span class="${type}">${name}</span>\
             // i.e. if indices 4 and 11 are present, but 5-10 and 12-13 are not present,
             // 5-10 will fall back to the path for 4 and 12-13 will fall back to the path for 11
             const itemPaths = new Map(crateCorpus.q);
-            // an array of (String) descriptions
-            const itemDescs = crateCorpus.d;
             // an array of (Number) the parent path index + 1 to `paths`, or 0 if none
             const itemParentIdxs = crateCorpus.i;
             // a string representing the list of function types
@@ -3217,7 +3247,8 @@ ${item.displayPath}<span class="${type}">${name}</span>\
                     ty: itemTypes.charCodeAt(i) - charA,
                     name: itemNames[i],
                     path: path,
-                    desc: itemDescs[i],
+                    // Loaded from an external file
+                    descIdx: i + 1,
                     parent: itemParentIdxs[i] > 0 ? paths[itemParentIdxs[i] - 1] : undefined,
                     type,
                     id: id,
@@ -3440,16 +3471,25 @@ ${item.displayPath}<span class="${type}">${name}</span>\
         if (window.searchState.getQueryStringParams().search) {
             search();
         }
+        window.onRustdocDesc = crateName => {
+            DESC_LOADERS.delete(crateName);
+            currentResults = null;
+            if (DESC_LOADERS.size === 0 && searchState.isDisplayed()) {
+                search(true);
+            }
+        };
     }
 
     if (typeof exports !== "undefined") {
         exports.initSearch = initSearch;
         exports.execQuery = execQuery;
         exports.parseQuery = parseQuery;
+        exports.module = module;
     }
 }
 
 if (typeof window !== "undefined") {
+    window.RUSTDOC_SEARCH_DESC = window.RUSTDOC_SEARCH_DESC || new Map();
     window.initSearch = initSearch;
     if (window.searchIndex !== undefined) {
         initSearch(window.searchIndex);

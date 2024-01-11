@@ -50,7 +50,7 @@ set-local-storage: {
 reload:
 
 // Waiting for the search results to appear...
-wait-for: "#search-tabs"
+wait-for: ".search-results.active"
 assert-css: (
     "#search-tabs > button > .count",
     {"color": "#888"},
@@ -162,7 +162,7 @@ set-local-storage: {
 reload:
 
 // Waiting for the search results to appear...
-wait-for: "#search-tabs"
+wait-for: ".search-results.active"
 assert-css: (
     "#search-tabs > button > .count",
     {"color": "#888"},
@@ -259,7 +259,7 @@ set-local-storage: {"rustdoc-theme": "light", "rustdoc-use-system-theme": "false
 reload:
 
 // Waiting for the search results to appear...
-wait-for: "#search-tabs"
+wait-for: ".search-results.active"
 assert-css: (
     "#search-tabs > button > .count",
     {"color": "#888"},
@@ -366,7 +366,7 @@ define-function: (
         // To be SURE that the search will be run.
         press-key: 'Enter'
         // Waiting for the search results to appear...
-        wait-for: "#search-tabs"
+        wait-for: ".search-results.active"
         // Checking that the colors for the alias element are the ones expected.
         assert-css: (".result-name .path .alias", {"color": |alias|})
         assert-css: (".result-name .path .alias > .grey", {"color": |grey|})

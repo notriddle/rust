@@ -24,6 +24,7 @@ use crate::formats::cache::Cache;
 use crate::formats::item_type::ItemType;
 use crate::formats::Impl;
 use crate::html::format::Buffer;
+use crate::html::render::search_index::SerializedSearchIndex;
 use crate::html::render::{AssocItemLink, ImplRenderingParameters};
 use crate::html::{layout, static_files};
 use crate::visit::DocVisitor;
@@ -46,7 +47,7 @@ use crate::{try_err, try_none};
 pub(super) fn write_shared(
     cx: &mut Context<'_>,
     krate: &Crate,
-    search_index: String,
+    search_index: SerializedSearchIndex,
     options: &RenderOptions,
 ) -> Result<(), Error> {
     // Write out the shared files. Note that these are shared among all rustdoc
@@ -312,7 +313,7 @@ pub(super) fn write_shared(
     let dst = cx.dst.join(&format!("search-index{}.js", cx.shared.resource_suffix));
     let (mut all_indexes, mut krates) =
         try_err!(collect_json(&dst, krate.name(cx.tcx()).as_str()), &dst);
-    all_indexes.push(search_index);
+    all_indexes.push(search_index.index);
     krates.push(krate.name(cx.tcx()).to_string());
     krates.sort();
 
@@ -339,6 +340,32 @@ else if (window.initSearch) window.initSearch(searchIndex);
         let krates = krates.iter().map(|k| format!("\"{k}\"")).join(",");
         Ok(format!("window.ALL_CRATES = [{krates}];").into_bytes())
     })?;
+
+    // Update search result descriptions
+    // These are lazy-loaded after the search finishes,
+    // because they're the biggest part of the index and
+    // aren't needed for the initial search.
+    //
+    // Search descriptions are stored in newline-separated strings.
+    // This is done to save parse time (parsing is slower than splitting)
+    // and space (`\n` is fewer characters than `","`).
+    cx.shared.ensure_dir(&cx.dst.join("search.desc"))?;
+    let desc_dst = cx.dst.join(&format!(
+        "search.desc/{}{}.js",
+        krate.name(cx.tcx()),
+        cx.shared.resource_suffix
+    ));
+    cx.shared.fs.write(
+        desc_dst,
+        format!(
+            "RUSTDOC_SEARCH_DESC=RUSTDOC_SEARCH_DESC||new Map();\
+             RUSTDOC_SEARCH_DESC.set('{krate}',{desc}.split(\"\\n\"));\
+             if(typeof exports!=='undefined')exports.RUSTDOC_SEARCH_DESC=RUSTDOC_SEARCH_DESC;\
+             if(typeof onRustdocDesc!=='undefined')onRustdocDesc('{krate}');",
+            krate = krate.name(cx.tcx()),
+            desc = serde_json::to_string(&search_index.desc).expect("failed serde conversion"),
+        ),
+    )?;
 
     if options.enable_index_page {
         if let Some(index_page) = options.index_page.clone() {

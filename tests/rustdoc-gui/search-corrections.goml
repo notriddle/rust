@@ -8,7 +8,7 @@ write: (".search-input", "NotableStructWithLongNamr")
 // To be SURE that the search will be run.
 press-key: 'Enter'
 // Waiting for the search results to appear...
-wait-for: "#search-tabs"
+wait-for: ".search-results.active"
 
 // Corrections aren't shown on the "In Names" tab.
 assert: "#search-tabs button.selected:first-child"
@@ -45,7 +45,7 @@ write: (".search-input", "-> NotableStructWithLongNamr")
 // To be SURE that the search will be run.
 press-key: 'Enter'
 // Waiting for the search results to appear...
-wait-for: "#search-tabs"
+wait-for: ".search-results.active"
 
 assert-css: (".search-corrections", {
     "display": "block"
@@ -62,7 +62,7 @@ write: (".search-input", "NotableStructWithLongNamr, NotableStructWithLongNamr")
 // To be SURE that the search will be run.
 press-key: 'Enter'
 // Waiting for the search results to appear...
-wait-for: "#search-tabs"
+wait-for: ".search-results.active"
 
 assert-css: (".search-corrections", {
     "display": "block"

@@ -9,7 +9,7 @@ write: (".search-input", "ZyxwvutMethodDisambiguation -> bool")
 // To be SURE that the search will be run.
 press-key: 'Enter'
 // Waiting for the search results to appear...
-wait-for: "#search-tabs"
+wait-for: ".search-results.active"
 // Check the disambiguated link.
 assert-count: ("a.result-method", 1)
 assert-attribute: ("a.result-method", {
@@ -29,7 +29,7 @@ write: (".search-input", "ZyxwvutMethodDisambiguation, usize -> usize")
 // To be SURE that the search will be run.
 press-key: 'Enter'
 // Waiting for the search results to appear...
-wait-for: "#search-tabs"
+wait-for: ".search-results.active"
 // Check the disambiguated link.
 assert-count: ("a.result-method", 1)
 assert-attribute: ("a.result-method", {

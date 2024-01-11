@@ -393,10 +393,19 @@ function loadSearchJS(doc_folder, resource_suffix) {
     const searchIndexJs = path.join(doc_folder, "search-index" + resource_suffix + ".js");
     const searchIndex = require(searchIndexJs);
 
+    const searchDescFolder = path.join(doc_folder, "search.desc");
+    globalThis.RUSTDOC_SEARCH_DESC = new Map();
+    fs.readdirSync(searchDescFolder).forEach(fileName => {
+        const d = require(path.join(searchDescFolder, fileName));
+        for (const [k, v] of d.RUSTDOC_SEARCH_DESC.entries()) {
+            globalThis.RUSTDOC_SEARCH_DESC.set(k, v);
+        }
+    });
+
     const staticFiles = path.join(doc_folder, "static.files");
     const searchJs = fs.readdirSync(staticFiles).find(f => f.match(/search.*\.js$/));
     const searchModule = require(path.join(staticFiles, searchJs));
-    searchModule.initSearch(searchIndex.searchIndex);
+    searchModule.initSearch.call({RUSTDOC_SEARCH_DESC}, searchIndex.searchIndex);
 
     return {
         doSearch: function(queryStr, filterCrate, currentCrate) {

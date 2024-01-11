@@ -1,6 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, VecDeque};
 
+use itertools::Itertools;
 use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
 use rustc_middle::ty::TyCtxt;
 use rustc_span::def_id::DefId;
@@ -16,12 +17,17 @@ use crate::html::format::join_with_double_colon;
 use crate::html::markdown::short_markdown_summary;
 use crate::html::render::{self, IndexItem, IndexItemFunctionType, RenderType, RenderTypeId};
 
+pub(crate) struct SerializedSearchIndex {
+    pub(crate) index: String,
+    pub(crate) desc: String,
+}
+
 /// Builds the search index from the collected metadata
 pub(crate) fn build_index<'tcx>(
     krate: &clean::Crate,
     cache: &mut Cache,
     tcx: TyCtxt<'tcx>,
-) -> String {
+) -> SerializedSearchIndex {
     let mut itemid_to_pathid = FxHashMap::default();
     let mut primitives = FxHashMap::default();
     let mut associated_types = FxHashMap::default();
@@ -317,7 +323,6 @@ pub(crate) fn build_index<'tcx>(
         .collect::<Vec<_>>();
 
     struct CrateData<'a> {
-        doc: String,
         items: Vec<&'a IndexItem>,
         paths: Vec<(ItemType, Vec<Symbol>)>,
         // The String is alias name and the vec is the list of the elements with this alias.
@@ -407,7 +412,6 @@ pub(crate) fn build_index<'tcx>(
             let mut names = Vec::with_capacity(self.items.len());
             let mut types = String::with_capacity(self.items.len());
             let mut full_paths = Vec::with_capacity(self.items.len());
-            let mut descriptions = Vec::with_capacity(self.items.len());
             let mut parents = Vec::with_capacity(self.items.len());
             let mut functions = String::with_capacity(self.items.len());
             let mut deprecated = Vec::with_capacity(self.items.len());
@@ -430,7 +434,6 @@ pub(crate) fn build_index<'tcx>(
                 parents.push(item.parent_idx.map(|x| x + 1).unwrap_or(0));
 
                 names.push(item.name.as_str());
-                descriptions.push(&item.desc);
 
                 if !item.path.is_empty() {
                     full_paths.push((index, &item.path));
@@ -453,12 +456,10 @@ pub(crate) fn build_index<'tcx>(
             let has_aliases = !self.aliases.is_empty();
             let mut crate_data =
                 serializer.serialize_struct("CrateData", if has_aliases { 9 } else { 8 })?;
-            crate_data.serialize_field("doc", &self.doc)?;
             crate_data.serialize_field("t", &types)?;
             crate_data.serialize_field("n", &names)?;
             // Serialize as an array of item indices and full paths
             crate_data.serialize_field("q", &full_paths)?;
-            crate_data.serialize_field("d", &descriptions)?;
             crate_data.serialize_field("i", &parents)?;
             crate_data.serialize_field("f", &functions)?;
             crate_data.serialize_field("c", &deprecated)?;
@@ -471,12 +472,18 @@ pub(crate) fn build_index<'tcx>(
         }
     }
 
-    // Collect the index into a string
-    format!(
+    // Search descriptions are stored in newline-separated strings.
+    // This is done to save parse time (parsing is slower than splitting)
+    // and space (`\n` is fewer characters than `","`).
+    let desc =
+        std::iter::once(&crate_doc).chain(crate_items.iter().map(|item| &item.desc)).join("\n");
+    // The index, which is actually used to search, is JSON
+    // It uses `JSON.parse(..)` to actually load, since JSON
+    // parses faster than the full JavaScript syntax.
+    let index = format!(
         r#"["{}",{}]"#,
         krate.name(tcx),
         serde_json::to_string(&CrateData {
-            doc: crate_doc,
             items: crate_items,
             paths: crate_paths,
             aliases: &aliases,
@@ -488,7 +495,8 @@ pub(crate) fn build_index<'tcx>(
         .replace('\'', r"\'")
         // We need to escape double quotes for the JSON.
         .replace("\\\"", "\\\\\"")
-    )
+    );
+    SerializedSearchIndex { index, desc }
 }
 
 pub(crate) fn get_function_type_for_search<'tcx>(
