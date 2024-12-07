@@ -1528,7 +1528,7 @@ href="https://doc.rust-lang.org/${channel}/rustdoc/read-documentation/search.htm
     if (isHelpPage) {
         buildHelpMenu();
     } else {
-        onEachLazy(document.querySelectorAll(`.help-menu > a`), helpLink => {
+        onEachLazy(document.querySelectorAll(".help-menu > a"), helpLink => {
             helpLink.addEventListener("click", event => {
                 // By default, have help button open docs in a popover.
                 // If user clicks with a moderator, though, use default browser behavior,
@@ -1544,7 +1544,7 @@ href="https://doc.rust-lang.org/${channel}/rustdoc/read-documentation/search.htm
                 } else {
                     showHelp();
                 }
-            })
+            });
         });
     }
 

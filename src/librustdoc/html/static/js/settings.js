@@ -1,7 +1,7 @@
 // Local js definitions:
 /* global getSettingValue, updateLocalStorage, updateTheme */
 /* global addClass, removeClass, onEach, onEachLazy */
-/* global MAIN_ID, getVar, getSettingsButton, getHelpButton */
+/* global MAIN_ID, getVar */
 
 "use strict";
 

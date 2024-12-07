@@ -1919,9 +1919,9 @@ button#toggle-all-docs:hover, button#toggle-all-docs:focus-visible {
 	/* Magnifying glass */
 	content: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" \
 		width="18" height="18" viewBox="0 0 16 16">\
-	    <circle r="5" cy="7" cx="6" style="fill:none;stroke:currentColor;stroke-width:3"></circle>\
-	    <path d="M 16,15 10,10" style="fill:none;stroke:currentColor;stroke-width:4"></path>\
-	    <desc>Search</desc>\
+	    <circle r="5" cy="7" cx="7" style="fill:none;stroke:black;stroke-width:3"/><path \
+	    d="M14.5,14.5 12,12" style="fill:none;stroke:black;stroke-width:3;stroke-linecap:round">\
+	    </path><desc>Search</desc>\
 	    </svg>');
 	width: 18px;
 	height: 18px;
