@@ -220,14 +220,9 @@ function preLoadCss(cssUrl) {
                 const out = searchState.outputElement().parentElement;
                 const hdr = document.createElement("div");
                 hdr.className = "main-heading search-results-main-heading";
-                const rootPath = getVar("root-path");
-                const currentCrate = getVar("current-crate");
                 hdr.innerHTML = `<nav class="sub">
                     <form class="search-form">
                         <span></span> <!-- This empty span is a hacky fix for Safari: see #93184 -->
-                        <div id="sidebar-button" tabindex="-1">
-                            <a href="${rootPath}${currentCrate}/all.html" title="show sidebar"></a>
-                        </div>
                         <input
                             class="search-input"
                             name="search"
@@ -1599,7 +1594,15 @@ href="https://doc.rust-lang.org/${channel}/rustdoc/read-documentation/search.htm
     // On larger, "desktop-sized" viewports (though that includes many
     // tablets), it's fixed-position, appears in the left side margin,
     // and it can be activated by resizing the sidebar into nothing.
-    const sidebarButton = document.getElementById("sidebar-button");
+    let sidebarButton = document.getElementById("sidebar-button");
+    if (!sidebarButton) {
+        sidebarButton = document.createElement("div");
+        sidebarButton.id = "sidebar-button";
+        const path = `${window.rootPath}${window.currentCrate}/all.html`;
+        sidebarButton.innerHTML = `<a href="${path}" title="show sidebar"></a>`;
+        const body = document.querySelector(".main-heading");
+        body.insertBefore(sidebarButton, body.firstChild);
+    }
     if (sidebarButton) {
         sidebarButton.addEventListener("click", e => {
             removeClass(document.documentElement, "hide-sidebar");
