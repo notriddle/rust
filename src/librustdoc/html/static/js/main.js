@@ -220,10 +220,13 @@ function preLoadCss(cssUrl) {
                 const out = searchState.outputElement().parentElement;
                 const hdr = document.createElement("div");
                 hdr.className = "main-heading search-results-main-heading";
+                const params = searchState.getQueryStringParams();
+                const autofocusParam = params.search === "" ? "autofocus" : "";
                 hdr.innerHTML = `<nav class="sub">
                     <form class="search-form">
                         <span></span> <!-- This empty span is a hacky fix for Safari: see #93184 -->
                         <input
+                            ${autofocusParam}
                             class="search-input"
                             name="search"
                             aria-label="Run search in the documentation"
