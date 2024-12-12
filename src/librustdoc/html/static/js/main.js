@@ -377,6 +377,64 @@ function preLoadCss(cssUrl) {
                 };
             }
 
+            // Push and pop states are used to add search results to the browser
+            // history.
+            if (browserSupportsHistoryApi()) {
+                // Store the previous <title> so we can revert back to it later.
+                const previousTitle = document.title;
+
+                window.addEventListener("popstate", e => {
+                    const params = searchState.getQueryStringParams();
+                    // Revert to the previous title manually since the History
+                    // API ignores the title parameter.
+                    document.title = previousTitle;
+                    // Synchronize search bar with query string state and
+                    // perform the search. This will empty the bar if there's
+                    // nothing there, which lets you really go back to a
+                    // previous state with nothing in the bar.
+                    if (params.search !== undefined) {
+                        loadSearch();
+                        searchState.inputElement().value = params.search;
+                        // Some browsers fire "onpopstate" for every page load
+                        // (Chrome), while others fire the event only when actually
+                        // popping a state (Firefox), which is why search() is
+                        // called both here and at the end of the startSearch()
+                        // function.
+                        e.preventDefault();
+                        searchState.showResults();
+                        if (params.search === "") {
+                            searchState.focus();
+                        }
+                    } else {
+                        // When browsing back from search results the main page
+                        // visibility must be reset.
+                        searchState.hideResults();
+                    }
+                });
+            }
+
+            // This is required in firefox to avoid this problem: Navigating to a search result
+            // with the keyboard, hitting enter, and then hitting back would take you back to
+            // the doc page, rather than the search that should overlay it.
+            // This was an interaction between the back-forward cache and our handlers
+            // that try to sync state between the URL and the search input. To work around it,
+            // do a small amount of re-init on page show.
+            window.onpageshow = () => {
+                const qSearch = searchState.getQueryStringParams().search;
+                if (qSearch !== undefined) {
+                    if (searchState.inputElement().value === "") {
+                        searchState.inputElement().value = qSearch;
+                    }
+                    searchState.showResults();
+                    if (qSearch === "") {
+                        loadSearch();
+                        searchState.focus();
+                    }
+                } else {
+                    searchState.hideResults();
+                }
+            };
+
             const params = searchState.getQueryStringParams();
             if (params.search !== undefined) {
                 searchState.setLoadingSearch();
