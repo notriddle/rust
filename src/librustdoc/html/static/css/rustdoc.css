@@ -177,9 +177,6 @@ h1, h2, h3, h4 {
 	   more aggressively when we want them to. */
 	overflow-wrap: anywhere;
 }
-.search-results-main-heading nav.sub {
-	grid-area: main-heading-h1;
-}
 .main-heading {
 	position: relative;
 	display: grid;
@@ -192,6 +189,17 @@ h1, h2, h3, h4 {
 	padding-bottom: 6px;
 	margin-bottom: 15px;
 }
+.search-results-main-heading {
+	grid-template-areas:
+		"main-heading-breadcrumbs main-heading-placeholder"
+		"main-heading-breadcrumbs main-heading-toolbar    "
+		"main-heading-h1          main-heading-toolbar    ";
+}
+.search-results-main-heading nav.sub {
+	grid-area: main-heading-h1;
+	align-items: end;
+	margin: 4px 0 8px 0;
+}
 .rustdoc-breadcrumbs {
 	grid-area: main-heading-breadcrumbs;
 	line-height: 1.25;
@@ -202,12 +210,13 @@ h1, h2, h3, h4 {
 }
 .search-switcher {
 	grid-area: main-heading-breadcrumbs;
-	line-height: 1.25;
+	line-height: 1.5;
 	display: flex;
 	color: var(--main-color);
 	align-items: baseline;
 	white-space: nowrap;
-	margin-top: -1px;
+	padding-top: 8px;
+	min-height: 34px;
 }
 .rustdoc-breadcrumbs a {
 	padding: 4px 0;
@@ -1133,6 +1142,8 @@ table,
 	position: relative;
 	/* allows this div (and with it the <select>-element "#crate-search") to be shrunk */
 	min-width: 0;
+	/* keep label text for switcher from moving down when this appears */
+	margin-top: -1px;
 }
 #crate-search {
 	padding: 0 23px 0 4px;
@@ -2327,11 +2338,27 @@ However, it's not needed with smaller screen width because the doc/code block is
 	        "main-heading-h1 main-heading-toolbar"
 	        "main-heading-sub-heading main-heading-toolbar";
 	}
+	.search-results-main-heading {
+	    display: grid;
+	    grid-template-areas:
+		"main-heading-breadcrumbs main-heading-toolbar"
+		"main-heading-breadcrumbs main-heading-toolbar"
+		"main-heading-h1 main-heading-toolbar";
+	}
 	rustdoc-toolbar {
 	    display: grid;
 	    grid-template-areas:
 	        "x settings help"
 	        "search summary summary";
+	}
+	.search-results-main-heading rustdoc-toolbar {
+	    display: grid;
+	    grid-template-areas:
+	        "settings help"
+	        "search search";
+	}
+	.search-results-main-heading #toggle-all-docs {
+	    display: none;
 	}
 	rustdoc-toolbar .settings-menu span.label,
 	rustdoc-toolbar .help-menu span.label
@@ -2408,6 +2435,13 @@ in src-script.js and main.js
 	        "main-heading-breadcrumbs main-heading-breadcrumbs"
 	        "main-heading-h1 main-heading-toolbar"
 	        "main-heading-sub-heading main-heading-toolbar";
+	}
+	.search-results-main-heading {
+	    display: grid;
+	    grid-template-areas:
+		"main-heading-breadcrumbs main-heading-placeholder"
+		"main-heading-breadcrumbs main-heading-toolbar"
+		"main-heading-h1 main-heading-toolbar";
 	}
 	rustdoc-topbar span.label,
 	rustdoc-toolbar .settings-menu,
