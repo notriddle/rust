@@ -23,10 +23,16 @@ pub(crate) fn visit_item(cx: &DocContext<'_>, item: &Item, hir_id: HirId, dox: &
         match event {
             Event::Text(text)
                 if &*text == "["
-                    && let Some((Event::Text(text), _)) = parser.peek()
-                    && text.trim_start().starts_with('^')
+                    && let Some((Event::Text(_), range)) = parser.peek()
+                    // Because the `\` is removed from the range, we need to use the end of the
+                    // previous range to get all the potentially missing characters.
+                    && let text = &dox[Range { start: span.end, end: range.end }]
+                    && text.starts_with('^')
                     && parser.next().is_some()
                     && let Some((Event::Text(text), end_span)) = parser.peek()
+                    // Because the `\` is removed from the range, we need to wait until we have the
+                    // `]` span so we can include all the potentially missing characters.
+                    && !dox[Range { start: span.end, end: end_span.start }].ends_with('\\')
                     && &**text == "]" =>
             {
                 missing_footnote_references.insert(Range { start: span.start, end: end_span.end });

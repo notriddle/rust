@@ -5,3 +5,13 @@
 //! [^1]: footnote defined
 //~^^^ ERROR: no footnote definition matching this footnote
 //~| ERROR: no footnote definition matching this footnote
+
+// Backslash escaped footnotes should not be recognized:
+//! [\^4]
+//!
+//! [^5\]
+//!
+//! \[^yup]
+//!
+//! [^foo\
+//! bar]
